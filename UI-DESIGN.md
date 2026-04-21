@@ -6,18 +6,35 @@ A running summary of what we've discussed for the beads / formulas UI. Descripti
 
 A web UI that makes beads usable by humans the way `bd` makes it usable by agents — read state, edit state, and (most importantly) author and visualize formulas without dropping into raw `.toml`.
 
-## Priority gradient
+## Architecture: three destinations
 
-- **P0** — Formula authoring + visualization. This is the load-bearing feature; everything else can come later.
-- **P1+** — Work graph, issue detail, work queue. The broader beads surface; useful, but not what justifies building the UI.
+Adopted from Claude Design's `prototype-v1/HANDOFF.md`. The UI has three destinations on two axes — **tempo** (slow/fast) and **backend** (filesystem/Dolt):
 
-The P0 vs P1 split matters because formula authoring is what flat text loses to the most. Issues are list/form-shaped and `bd list --json` + a textual `bd show` already cover them adequately for most operators. Formulas are graph-shaped, deeply nested, and parameterized — they're where text stops being readable.
+| Destination | Question | Tempo | Backend |
+|-------------|----------|-------|---------|
+| **Author**  | What *should* happen? (formulas) | slow, edit-heavy | filesystem `.beads/formulas/` |
+| **Observe** | What *is* happening? (molecules, beads) | real-time, read-heavy | Dolt |
+| **Capture** | Here's a new bead. | fast, single write | Dolt |
 
-## P0: Formula authoring + visualization
+Issue detail, catalog, cook preview, timeline — all modes/layouts/peeks within these destinations, not separate top-level things.
 
-### Metaphor
+### Shipping order (not the architecture)
 
-Two-pane synchronized editor in the spirit of Mapbox Studio's style editor or browser devtools' DOM/CSS panes.
+- **P0** — Author. Formula authoring is what justifies the UI; ship this first.
+- **P1** — Observe. Fleet / Graph / Queue / Timeline layouts + the shared peek drawer.
+- **P2** — Capture. Single-bead form. Cheap to add once Observe exists.
+
+## Author
+
+Formulas are filesystem artifacts under `.beads/formulas/` (and other search paths per `bd formula list`). The destination has two modes: **Browse** (catalog) and **Edit** (the two-pane editor).
+
+### Browse
+
+Card grid of available formulas: name, description, var count, step count. Search + filter by type. Click a card → opens Edit.
+
+### Edit — two-pane synchronized editor
+
+In the spirit of Mapbox Studio's style editor or browser devtools' DOM/CSS panes.
 
 | Pane | Mapbox Studio analogue | Devtools analogue | Formula UI |
 |------|------------------------|-------------------|------------|
@@ -25,60 +42,58 @@ Two-pane synchronized editor in the spirit of Mapbox Studio's style editor or br
 | Source | Style JSON | CSS source | The `.formula.toml` |
 | Sync | Click layer → highlight in JSON; edit JSON → map re-renders | Click element → jump in Sources; edit CSS → page repaints | Click step in DAG → scroll/highlight in TOML; edit TOML → DAG redraws live |
 
-The TOML is the source of truth. The visual representation is a derived view that supports authoring affordances the text can't.
+The TOML is the source of truth. The visual representation is a derived view.
+
+Three tabs within Edit:
+
+- **Source** — the TOML↔DAG pair
+- **Cook** — renders `{{var}}` interpolations into a proto preview (live, no commit)
+- **Instances** — lists molecules poured from this formula
 
 ### What the visual pane needs
 
-- **Step DAG** — nodes by step `id`, edges by `needs`. Cycle detection visible immediately.
-- **Per-step badges**:
-  - Retry policy (`max_attempts`, `on_exhausted`)
-  - Metadata keys (`gc.continuation_group`, `gc.session_affinity`, etc.)
-  - Idempotency hinges where the formula has them (e.g. `gastownhall-upstream`'s "skip if PR already exists" check)
-- **Var palette** — required vs. optional, defaults inline, with a "fill in to cook" form.
-- **Composition tree** — `extends` parent + `compose`d formulas as a tree above the steps view, so it's clear what's inherited vs. local.
-- **Cook preview** — given var values, render the proto structure that `bd cook` would produce. Round-trip to a fake `mol pour` without committing.
+- Step DAG by `needs` (nodes = step `id`, edges = deps). Cycle detection visible.
+- Per-step badges: retry policy (`max_attempts`, `on_exhausted`), `metadata` keys (`gc.continuation_group`, `gc.session_affinity`), idempotency hinges.
+- Var palette: required vs. optional, defaults inline, typed form widgets (enum / bool / path / string).
+- Composition tree: `extends` parent + `compose`d formulas as a tree above the steps view.
+- Cook preview: given var values, render the proto structure that `bd cook` would produce.
 
 ### Sync semantics
 
-- Edit the TOML → the visual updates live (debounced).
-- Click a step in the visual → cursor jumps to that step in the TOML, with the step's TOML range highlighted.
-- Edit a var/metadata field via the visual affordances → the TOML edit happens at the right location with no surrounding-context churn.
-- Invalid TOML still renders the visual where it can, with errors surfaced inline (devtools-style: red squiggle in the source pane, broken-state badge on the affected node).
+- Edit TOML → visual updates live (debounced).
+- Click step in visual → cursor jumps to that step's `[[steps]]` block in TOML, line highlighted.
+- Edit var/metadata via visual affordances → TOML edit at the right location with no surrounding-context churn.
+- Invalid TOML still renders the visual where it can, with errors surfaced inline.
 
-## P1: the broader beads surface
+## Observe
 
-### Work graph view
+Three layouts + a shared peek drawer + workspace switcher:
 
-DAG renderer over arbitrary `blocks` / `parent-child` / `waits-for` / `conditional-blocks` edges.
+- **Fleet** — cross-molecule view. One row per live molecule, grouped by formula (toggle to workspace/status). Workspace-colored left bar, current phase, progress, status (`running` / `retry N/M` / `at gate` / `blocked`). Answers "what's running right now across the city?" Click row → drops into that molecule's Timeline.
+- **Graph** — one molecule's dep shape. Nodes = issues, edges styled by dep type. The "where am I in the pipeline?" view.
+- **Timeline** — one molecule's execution history. Events as a timeline; closest analogue to Temporal UI's history view.
 
-- Nodes: issues colored by status (`open`/`in_progress`/`blocked`/`closed`/`deferred`/`tombstone`/...)
-- Edges: styled by dep type
-- Overlays: ready highlight (computed from the DAG + claim state), phase indicator on the molecule root (proto / mol / wisp)
-- Drill-in: click a node → opens the issue detail panel
+Fleet → Graph → Timeline is a zoom-out sequence: many molecules → one molecule's shape → one molecule's history.
 
-Important difference from Temporal UI: beads has arbitrary DAGs, not parent-child trees. The graph renderer is the main view, not a side accessory.
+### Peek drawer
 
-### Issue detail panel
+Shared bead/molecule detail overlay invoked from any layout. Full field surface (title, description, design, acceptance_criteria, notes, status, priority, assignee, labels, external_ref, deps, comments, audit events). Editable.
 
-Full editor for the issue schema:
+### Workspace switcher
 
-- `title`, `description`, `design`, `acceptance_criteria`, `notes`
-- `status`, `priority` (0-4), `issue_type`, `assignee`
-- `labels`, `external_ref`
-- `dependencies` (with their types) and `comments`
-- Audit/event timeline (per-issue history)
+Consolidated-view pattern: color-bar-per-workspace appears in result rows so it's clear which workspace a bead/molecule belongs to without context-switching.
 
-Larger than Temporal's workflow-attribute surface; closer to GitHub Issues / Linear in scope.
+## Capture
 
-### Work queue view
+Single-bead form: title, description, type, priority, assignee, labels, external_ref, deps (with a dep-type picker). Fast path for "here's a new bead."
 
-`bd ready` flattened into cards by priority/assignee. The "what should I do next" view. Filters: status/priority/assignee/type/label/metadata.
+"Turn this into an epic with phases" belongs on the bead as a second-click action (**Expand to epic**) — it pours a formula, and happens after capture.
 
-Complements (doesn't replace) the work-graph view — graph is "where am I in the pipeline," queue is "what's claimable right now."
+**Not** a DSL or batch-paste surface. An earlier prototype iteration had that; rejected as reinventing formulas in a second syntax.
 
 ## Vocabulary the UI must surface
 
-These show up across views and need consistent visual treatment:
+Consistent visual treatment across destinations:
 
 - **Phase metaphor** (chemistry):
   - **Solid / Proto** — frozen template (synced)
@@ -89,7 +104,7 @@ These show up across views and need consistent visual treatment:
 - **Status flow**: `open` → `in_progress` → `closed` (and `blocked` / `deferred` / `tombstone` / `pinned` / `hooked`).
 - **Issue types**: `bug`, `feature`, `task`, `epic`, `chore`, `message`, `merge-request`, `molecule`, `gate`, `agent`, `role`, `convoy`.
 
-The UI should make wisps visually distinct (badge or watermark) since they don't behave like other beads — invisible to collaborators, hard-deleted on squash.
+Wisps need a visible distinguishing mark (badge or watermark) since they don't behave like other beads — invisible to collaborators, hard-deleted on squash.
 
 ## Inspirations and what doesn't port
 
@@ -100,15 +115,23 @@ The UI should make wisps visually distinct (badge or watermark) since they don't
 | Temporal UI | Per-execution timeline; workflow list with filters | Parent-child workflow tree (beads is general DAG); deterministic replay (not a beads concept) |
 | GitHub Issues / Linear | Issue field editor; comment surface | Centralized state model (beads is Dolt-distributed) |
 
-## Out of scope for the design discussion
+## Out of scope
 
 - Implementation framework choice (React/Svelte/Elm/...).
-- The live data API the UI talks to. Tracked separately under `fo-beads-ui-api-spec` in the foundations bead store.
+- Live data API the UI talks to. Tracked under `fo-beads-ui-api-spec`.
 - Auth / multi-writer story. Same bead.
-- The phase-1 prototype itself (this repo's purpose). Driven interactively via Claude Design; not agent-actionable.
+- The interactive prototype itself. Driven via Claude Design; see `prototype-v1/`.
+
+## Prototype iterations
+
+- **v1** (`prototype-v1/`, 2026-04-21) — Claude Design output. Pan/zoom wireframe canvas covers all surfaces; hi-fi interactive editor (`Beads · Formula Editor.html`) renders `gastownhall-upstream.formula.toml` with live TOML↔DAG sync, form-wired vars, cook preview, instances tab stub. See `prototype-v1/HANDOFF.md` for architecture, punts, and blocking questions.
 
 ## Open questions
 
-- Does formula authoring share the bead store, or is it file-system-only? Today formulas live as `.formula.toml` files under `.beads/formulas/` (and other search paths); they're not bd issues. The UI has to hit the filesystem (or a server abstracting it), not just the bead API.
-- How does cooking integrate? `bd cook` produces a proto bead; preview should show the proto structure without committing it. Live preview against an ephemeral cook?
-- Composition discovery: `extends` and `compose` reference other formulas by name. The UI needs a formula catalog (search paths from `bd formula list`) to resolve and visualize them.
+- **Formula filesystem vs bead store.** Formulas are `.formula.toml` files under `.beads/formulas/` (and other search paths); they're not bd issues. Likely shape: `bd formula list/show --json` as the server surface; UI hits that, not the FS directly. Factored into `fo-beads-ui-api-spec`.
+- **Wisp visibility in Fleet.** Row-level badge is the default; dedicated toggle deferred — operator wants hands-on time with the prototype before deciding.
+- **Gate interactions.** Human gates (`type="human"`) — approve in UI, or link out to where they're resolved (Slack/mail/CLI)? Also deferred pending hands-on time with the prototype.
+- **Continuation groups as swimlanes.** `gc.continuation_group` metadata groups steps into logical runs. Probably render as colored bands in the DAG (or swimlanes in a layered layout). Worth prototyping.
+- **TOML range tracking in the editor.** Incremental parse + source maps vs rebuild-on-edit. Likely rebuild-on-edit is fine for <2k-line files.
+- **Var form schema.** Form widgets are ad-hoc today. A `[vars.X.ui]` block in the formula spec (hint `type="path"` / `"enum"` / `"bool"`) would let authors drive the form.
+- **Cook preview vs `bd pour --dry-run`.** Shell out to `bd` for correctness, or reimplement cook in-browser for responsiveness.

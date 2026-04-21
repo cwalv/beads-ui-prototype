@@ -36,7 +36,11 @@ Three real-world formulas, picked to span the complexity range.
 
 ## UI scope
 
-See [`UI-DESIGN.md`](UI-DESIGN.md) for the running design notes — priority gradient, the two-pane formula-authoring metaphor, view inventory, vocabulary the UI must surface, and open questions.
+See [`UI-DESIGN.md`](UI-DESIGN.md) for the running design notes — three-destinations architecture (Author / Observe / Capture), the two-pane formula-authoring metaphor, vocabulary the UI must surface, and open questions.
+
+## Prototype iterations
+
+- [`prototype-v1/`](prototype-v1/) — Claude Design output, 2026-04-21. Pan/zoom wireframe canvas (`Beads UI Wireframe.html`) covering all surfaces, plus a hi-fi interactive editor (`Beads · Formula Editor.html`) with live TOML↔DAG sync against `gastownhall-upstream.formula.toml`. Both HTMLs are self-contained — open in a browser, no build step. See `prototype-v1/HANDOFF.md` for architecture, punts, and blocking questions.
 
 ## Source of truth
 

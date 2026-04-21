@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>beads UI · wireframe sweep</title>
+<meta name="viewport" content="width=1600" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="wireframe-styles.css" />
+<link rel="stylesheet" href="wireframe-v2.css" />
+<style>
+  html, body { margin: 0; padding: 0; background: #f0eee9; font-family: Inter, system-ui, sans-serif; }
+  #root { width: 100vw; height: 100vh; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="wf-shared.jsx"></script>
+<script type="text/babel" src="wf-formula-editor.jsx"></script>
+<script type="text/babel" src="wf-dag-cook.jsx"></script>
+<script type="text/babel" src="wf-views.jsx"></script>
+<script type="text/babel" src="wf-learn.jsx"></script>
+<script type="text/babel" src="wf-v2.jsx"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect } = React;
+
+function App() {
+  return (
+    <DesignCanvas
+      title="beads · formula UI wireframe sweep"
+      subtitle="Mapbox Studio direction · card-heavy DAG · live TOML↔DAG (simulated)"
+    >
+      <DCSection id="v2" title="v2 · Three destinations + peek + workspace" subtitle="Re-architected around Author / Observe / Capture. Shared peek drawer, shared workspace switcher, palette stays as accelerator.">
+        <DCArtboard id="arch" label="0 · Architecture overview" width={1200} height={720}>
+          <ArchOverview />
+        </DCArtboard>
+        <DCArtboard id="author-browse" label="A · Author · Browse (catalog + preview)" width={1640} height={960}>
+          <AuthorBrowse />
+        </DCArtboard>
+        <DCArtboard id="observe-timeline" label="O · Observe · Timeline (Temporal-style molecule chronology + peek)" width={1640} height={960}>
+          <ObserveTimeline />
+        </DCArtboard>
+        <DCArtboard id="capture" label="C · Capture · Single-bead form" width={1200} height={820}>
+          <CaptureSurface />
+        </DCArtboard>
+        <DCArtboard id="observe-fleet" label="O · Observe · Fleet (all live molecules across workspaces)" width={1640} height={960}>
+          <ObserveFleet />
+        </DCArtboard>
+        <DCArtboard id="ws-switch" label="W · Workspace switcher · consolidated view" width={1200} height={720}>
+          <WorkspaceSwitcher />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="p0" title="P0 · Formula authoring (hero, v1)" subtitle="Original two-pane editor — now lives inside Author · Edit · Source.">
+        <DCArtboard id="editor" label="1 · Formula editor — two pane" width={1640} height={1040}>
+          <FormulaEditor />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="dag" title="DAG detail · step states & edges" subtitle="Zoom into the visual pane: card variants, edge grammar, inline authoring affordances.">
+        <DCArtboard id="dag-detail" label="2 · Step cards + edges + affordances" width={1200} height={820}>
+          <StepVariants />
+        </DCArtboard>
+        <DCArtboard id="cook" label="3 · Cook preview (vars → proto)" width={1200} height={820}>
+          <CookPreview />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="p1" title="P1 · The broader beads surface" subtitle="Catalog, work graph, issue detail, ready queue — using the same chrome.">
+        <DCArtboard id="catalog" label="4 · Formula catalog (extends/compose resolution)" width={1200} height={820}>
+          <Catalog />
+        </DCArtboard>
+        <DCArtboard id="graph" label="5 · Work graph (issue DAG, status colors)" width={1200} height={820}>
+          <WorkGraph />
+        </DCArtboard>
+        <DCArtboard id="issue" label="6 · Issue detail (full schema + activity)" width={1200} height={820}>
+          <IssueDetail />
+        </DCArtboard>
+        <DCArtboard id="queue" label="7 · Work queue (bd ready by priority)" width={1200} height={820}>
+          <WorkQueue />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="learn" title="Learning surface · command palette & hint layer" subtitle="Consistent doc-hint pattern so the UI teaches beads vocabulary in-place — ⌘K for discovery, hover popovers for every concept.">
+        <DCArtboard id="palette" label="8 · Command palette (⌘K) + hover hint example" width={1200} height={820}>
+          <CommandPalette />
+        </DCArtboard>
+        <DCArtboard id="queue-learn" label="9 · Ready queue deep-dive — defer/due, semantic status, discovered-from" width={1640} height={1040}>
+          <QueueDeepDive />
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
