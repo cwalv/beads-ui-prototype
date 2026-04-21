@@ -34,10 +34,9 @@ Three real-world formulas, picked to span the complexity range.
 | `mol-weave-work.formula.toml` | foundations example | Composition; rig-scoped work pattern |
 | `gastownhall-upstream.formula.toml` | 8 | Real-world — non-trivial `needs` DAG, retry/metadata, idempotency hinges, mailroom escalations |
 
-## UI scope (working priorities)
+## UI scope
 
-- **P0 — Formula authoring + visualization**. Two-pane synchronized editor (graph view ↔ raw `.toml`) in the spirit of Mapbox Studio's style editor or browser devtools' DOM/CSS panes. Step DAG with `needs` arrows, var palette, retry/metadata badges per step, composition tree (`extends` / `compose`), `bd cook` preview.
-- **P1+ — Work-graph / issue-detail / work-queue views**. The broader beads surface: render arbitrary dependency DAGs, issue editing, ready/blocked queues. Important but downstream of formula authoring.
+See [`UI-DESIGN.md`](UI-DESIGN.md) for the running design notes — priority gradient, the two-pane formula-authoring metaphor, view inventory, vocabulary the UI must surface, and open questions.
 
 ## Source of truth
 
