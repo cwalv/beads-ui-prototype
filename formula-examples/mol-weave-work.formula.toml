@@ -1,0 +1,264 @@
+description = """
+Weave-work lifecycle — peer workweave + refinery-based submission.
+
+Replaces mol-polecat-work for workweave rigs. The molecule creates a
+peer workweave **scoped to the work bead** (named `{{issue}}`) on its
+first step, the agent edits across repos under `github/<owner>/<repo>/`
+inside that workweave, then submits the whole cross-repo change set to
+a refinery.
+
+Workweave lifecycle is per-bead, not per-agent: workers are stateless
+and can pick up any bead, multiple workers run concurrently without
+collision, and the witness cleans workweaves per-bead.
+
+## Weave-worker Contract (Self-Cleaning Model)
+
+1. Receive work (bead routed to the worker pool); molecule's first
+   step creates or resumes a peer workweave named `{{issue}}`
+2. Follow formula steps in order
+3. Submit: push every touched ephemeral branch, run `rwv lock`, commit
+   `rwv.lock` in `projects/<project>/`, set cross-repo metadata on the
+   bead, reassign to refinery, drain.
+4. You are GONE — refinery merges, closes the bead.
+
+**No MR beads.** Work beads flow directly: pool → weave-worker → refinery
+→ closed. In `mr`/`pr` mode the refinery publishes a pull request per
+touched repo instead of landing directly.
+
+**Rejection-aware.** If the work bead has `metadata.workweave` and
+`metadata.rejection_reason`, a previous attempt was rejected by the
+refinery. Resume in the named workweave; don't redo all the work.
+
+## Ephemeral branch convention
+
+`rwv workweave <project> create <name>` checks out every repo on
+`<name>/<base>` (e.g. `fo-worker-1/main`). The submit step reads each
+repo's current branch and pushes it to origin unchanged.
+
+## Cross-repo state
+
+`rwv lock` captures every repo's HEAD into `projects/<project>/rwv.lock`.
+The polecat commits the lock to the project's own ephemeral branch
+(in `projects/<project>/`, which is itself a git worktree) so the
+refinery can merge a coherent snapshot.
+
+## Failure Modes
+
+| Situation | Action |
+|-----------|--------|
+| Tests fail | Fix them. Do not submit failures. |
+| Blocked | Mail mayor, mark yourself stuck |
+| Context filling | `gc runtime request-restart` (commit first — non-git state is lost) |
+| Unsure | Mail mayor, don't guess |"""
+formula = "mol-weave-work"
+extends = ["mol-weave-base"]
+version = 1
+
+[[steps]]
+id = "workspace-setup"
+title = "Discover or create per-bead workweave; handle rejection-aware resume"
+needs = ["load-context"]
+description = """
+This step finds (resume) or creates (fresh) a peer workweave **scoped
+to this bead** (named `{{issue}}`), cd's into it, records the path on
+the bead, and handles rebase-aware resume for rejected work.
+
+**Config: base_branch = {{base_branch}}**
+**Config: setup_command = {{setup_command}}**
+
+**1. Discover or create the per-bead workweave.**
+
+Workweaves are scoped to the work bead, not the agent. This means an
+agent can pick up new work even if an old workweave is being recovered,
+multiple workers run concurrently without collision, and the witness
+cleans workweaves per-bead.
+
+```bash
+PROJECT=$(cat "$(rwv resolve)/.rwv-active")
+WORKWEAVE="{{issue}}"
+WORKWEAVE_DIR=$(bd show {{issue}} --json | jq -r '.metadata.work_dir // empty')
+if [ -z "$WORKWEAVE_DIR" ] || [ ! -d "$WORKWEAVE_DIR" ]; then
+  # Idempotent: preserves an existing workweave's non-git state.
+  WORKWEAVE_DIR=$(rwv workweave --hook-mode "$PROJECT" create "$WORKWEAVE")
+fi
+cd "$WORKWEAVE_DIR"
+bd update {{issue}} \\
+  --set-metadata workweave="$WORKWEAVE" \\
+  --set-metadata work_dir="$WORKWEAVE_DIR"
+```
+Recording early means witness recovery and the refinery can find your
+workweave if you crash. Subsequent steps assume cwd is `$WORKWEAVE_DIR`
+— re-`cd "$WORKWEAVE_DIR"` at the start of any step that runs in a
+fresh shell.
+
+**3. Fetch latest for every repo:**
+```bash
+for repo in github/*/*/; do
+  (cd "$repo" && git fetch --prune origin) || true
+done
+(cd projects/*/ && git fetch --prune origin 2>/dev/null) || true
+```
+
+**4. Rejection-aware resume.**
+
+```bash
+REJECTION=$(bd show {{issue}} --json | jq -r '.metadata.rejection_reason // empty')
+if [ -n "$REJECTION" ]; then
+  # Per-repo rebase on the recorded target.
+  TARGET=$(bd show {{issue}} --json | jq -r '.metadata.target // "{{base_branch}}"')
+  for repo in github/*/*/; do
+    cd "$repo"
+    BRANCH=$(git branch --show-current)
+    # Only rebase if the ephemeral branch actually exists on this repo.
+    if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+      git rebase "origin/$TARGET" || {
+        echo "Conflict in $repo — resolve, then git rebase --continue"
+        exit 1
+      }
+    fi
+    cd - >/dev/null
+  done
+  bd update {{issue}} --unset-metadata rejection_reason
+fi
+```
+If a rebase conflict stops you: resolve it, `git rebase --continue`,
+then move on. Don't redo unrelated work.
+
+**5. Confirm clean state per repo:**
+```bash
+for repo in github/*/*/; do
+  (cd "$repo" && git status --porcelain && git status | head -3)
+done
+```
+Expect clean trees on ephemeral branches (unless resuming mid-implement).
+
+**6. Run weave-root setup (if configured):**
+```bash
+cd "$WEAVE"
+{{setup_command}}
+```
+Empty `setup_command` → skip.
+
+**Exit criteria:** In a peer workweave on per-repo `<workweave>/<base>`
+branches, any prior rebase conflicts resolved, `metadata.workweave` and
+`metadata.work_dir` recorded on the bead."""
+
+[[steps]]
+id = "submit-to-refinery"
+title = "Push branches, capture lock, hand off to refinery"
+needs = ["self-review"]
+description = """
+Push every touched repo's ephemeral branch, snapshot cross-repo state,
+record it on the bead, and reassign to the refinery. You cease to exist
+after this step.
+
+**Config: base_branch = {{base_branch}}**
+
+**1. Safety net: capture any stray uncommitted work per repo.**
+```bash
+cd "$(rwv resolve)"
+for repo in github/*/*/; do
+  cd "$repo"
+  if [ -n "$(git status --porcelain)" ]; then
+    git add -A
+    git commit -m "chore: capture remaining work ({{issue}})"
+  fi
+  cd - >/dev/null
+done
+```
+Self-review should have caught this; this is belt-and-suspenders.
+
+**2. Push each touched repo's ephemeral branch.**
+
+A repo is *touched* when its ephemeral branch has commits not on
+`origin/<base>`. Push only those; skip untouched repos.
+```bash
+REPOS_TOUCHED=()
+for repo in github/*/*/; do
+  cd "$repo"
+  BRANCH=$(git branch --show-current)
+  BASE="${BRANCH#*/}"
+  if git log "origin/$BASE..HEAD" --oneline 2>/dev/null | grep -q .; then
+    git push origin "HEAD:$BRANCH"
+    REPOS_TOUCHED+=("${repo%/}")
+  fi
+  cd - >/dev/null
+done
+```
+
+If `git push` fails because the remote has moved (rare — ephemeral
+branches are yours): `git push origin "HEAD:$BRANCH" --force-with-lease`.
+
+**3. Snapshot cross-repo state with `rwv lock`:**
+```bash
+cd "$(rwv resolve)"
+rwv lock
+```
+`rwv lock` writes `projects/<project>/rwv.lock` with every repo's HEAD.
+
+**4. Commit the lock in the project worktree (if it changed).**
+
+`projects/<project>/` is itself a git worktree on `<workweave>/<base>`.
+```bash
+PROJECT=$(cat .rwv-active)
+cd "projects/$PROJECT"
+LOCK_SHA=""
+if [ -n "$(git status --porcelain rwv.lock)" ]; then
+  git add rwv.lock
+  git commit -m "lock: capture workweave state ({{issue}})"
+  git push origin "HEAD:$(git branch --show-current)" 2>/dev/null || true
+  LOCK_SHA=$(git rev-parse HEAD)
+  # Record projects/<project> as a touched repo — refinery must merge it.
+  REPOS_TOUCHED+=("projects/$PROJECT")
+fi
+cd - >/dev/null
+```
+If the project repo has no remote, the push is a no-op — shared worktrees
+see the new commit through the local .git. Refinery handles both cases.
+
+**5. Write cross-repo metadata onto the work bead.**
+```bash
+TARGET="{{base_branch}}"
+REPOS_JOINED=$(printf '%s,' "${REPOS_TOUCHED[@]}"); REPOS_JOINED="${REPOS_JOINED%,}"
+bd update {{issue}} \\
+  --set-metadata workweave="$WORKWEAVE" \\
+  --set-metadata target="$TARGET" \\
+  --set-metadata repos_touched="$REPOS_JOINED" \\
+  --notes "Implemented across ${#REPOS_TOUCHED[@]} repos in workweave $WORKWEAVE"
+if [ -n "$LOCK_SHA" ]; then
+  bd update {{issue}} --set-metadata lock_sha="$LOCK_SHA"
+fi
+```
+The refinery reads `repos_touched` (comma-separated paths relative to
+weave root) and `workweave` to reconstruct each branch as
+`<workweave>/<base>`.
+
+`merge_strategy` is whatever the sling or mayor already set on the bead
+(`direct` by default, `mr`/`pr` for pull-request mode). This formula
+does not decide strategy.
+
+**6. Reassign to refinery:**
+```bash
+bd update {{issue}} --status=open --assignee=<rig>/refinery \\
+  --set-metadata gc.routed_to=<rig>/refinery
+```
+Update both `assignee` and `gc.routed_to` so the reconciler stops
+counting this bead for the worker pool and starts counting it for the
+refinery pool. Substitute `<rig>` with the actual rig/template name
+the city uses for the refinery agent.
+
+**7. Drain and exit.**
+```bash
+gc runtime drain-ack
+exit
+```
+
+`drain-ack` tells the reconciler to end this session. Your peer
+workweave stays around until the refinery is done — the witness or a
+cleanup agent removes it once the bead is closed. You are GONE. Done
+means gone.
+
+**Exit criteria:** Every touched ephemeral branch pushed, `rwv.lock`
+committed in `projects/<project>/`, `workweave`/`target`/`repos_touched`
+(and `lock_sha` if applicable) set on the bead, bead reassigned to
+refinery, drain acknowledged, session exited."""
