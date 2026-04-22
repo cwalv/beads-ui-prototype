@@ -18,6 +18,10 @@ export async function fetchWorkspaces(): Promise<Workspace[]> {
   if (!res.ok) {
     throw new Error(`GET /workspaces failed: ${res.status}`);
   }
-  const body = (await res.json()) as { workspaces: Workspace[] };
-  return body.workspaces;
+  const body = await res.json();
+  if (Array.isArray(body)) return body as Workspace[];
+  if (body && Array.isArray((body as { workspaces?: unknown }).workspaces)) {
+    return (body as { workspaces: Workspace[] }).workspaces;
+  }
+  throw new Error(`unexpected /workspaces response shape`);
 }
