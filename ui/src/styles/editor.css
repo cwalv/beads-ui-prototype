@@ -77,11 +77,12 @@
 .ed-conflict-banner button:hover { background: var(--warn); color: #fff; }
 
 /* Body: DAG pane (LEFT) | TOML pane (MIDDLE) | Vars drawer (RIGHT) */
-.ed-body { flex: 1; display: flex; min-height: 0; }
+.ed-body { flex: 1; display: flex; min-width: 0; min-height: 0; }
 
 /* DAG pane — LEFT */
 .ed-dag-pane {
-  flex: 1; min-width: 0; display: flex; flex-direction: column;
+  flex: 1 1 0; min-width: 0; overflow: hidden;
+  display: flex; flex-direction: column;
   border-right: 1px solid var(--rule);
   background: var(--bg-2);
 }
@@ -152,9 +153,11 @@
 .ed-edges .head { fill: var(--mute-2); }
 .ed-edges .head.sel { fill: var(--accent); }
 
-/* TOML pane — MIDDLE */
+/* TOML pane — MIDDLE. Shares viewport with the DAG pane (flex 1/1); vars
+   drawer on the right is fixed-width. min-width keeps the pane usable on
+   narrow viewports; overflow:hidden contains the textarea/overlay. */
 .ed-src-pane {
-  width: 560px; min-width: 360px; flex-shrink: 0;
+  flex: 1 1 0; min-width: 360px; overflow: hidden;
   display: flex; flex-direction: column; background: var(--bg);
   border-right: 1px solid var(--rule);
   position: relative;
