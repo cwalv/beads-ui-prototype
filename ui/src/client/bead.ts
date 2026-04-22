@@ -1,5 +1,35 @@
 import { bdClient } from './bd';
-import type { Bead } from '../types';
+import type { Bead, BeadType, DepType } from '../types';
+
+export interface CreateBeadParams {
+  title: string;
+  description?: string;
+  design?: string;
+  acceptanceCriteria?: string;
+  notes?: string;
+  type?: BeadType;
+  priority?: number;
+  assignee?: string;
+  labels?: string[];
+  externalRef?: string;
+  workspace?: string;
+}
+
+export async function createBead(params: CreateBeadParams): Promise<Bead> {
+  const args = ['create', '--json', '--title', params.title];
+  if (params.description?.trim()) { args.push('--description'); args.push(params.description); }
+  if (params.design?.trim()) { args.push('--design'); args.push(params.design); }
+  if (params.acceptanceCriteria?.trim()) { args.push('--acceptance'); args.push(params.acceptanceCriteria); }
+  if (params.notes?.trim()) { args.push('--notes'); args.push(params.notes); }
+  if (params.type) args.push('--type', params.type);
+  if (params.priority !== undefined) args.push('--priority', params.priority.toString());
+  if (params.assignee?.trim()) args.push(`--assignee=${params.assignee}`);
+  for (const label of params.labels ?? []) { args.push('--add-label'); args.push(label); }
+  if (params.externalRef?.trim()) args.push(`--external-ref=${params.externalRef}`);
+  return bdClient.fetch<Bead>(args, params.workspace ? { workspace: params.workspace } : {});
+}
+
+export interface AddDepParams { from: string; to: string; type: DepType; }
 
 export async function getBead(id: string): Promise<Bead> {
   return bdClient.fetch<Bead>(['show', id, '--json']);
