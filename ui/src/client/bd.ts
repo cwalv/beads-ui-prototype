@@ -1,4 +1,4 @@
-import type { BdResponse, BdError } from '../types';
+import type { BdError } from '../types';
 
 const BASE_URL = import.meta.env.VITE_BD_SERVER_URL as string | undefined;
 
@@ -23,13 +23,15 @@ async function bdFetch<T>(args: string[], opts: BdFetchOptions = {}): Promise<T>
       signal: opts.signal,
     });
     if (!res.ok) {
-      throw { kind: 'server', message: `bd-server returned ${res.status}`, status: res.status } satisfies BdError;
+      let detail = '';
+      try {
+        const errBody = await res.json() as { error?: string; stderr?: string };
+        detail = errBody.error ?? '';
+        if (errBody.stderr) detail = detail ? `${detail}: ${errBody.stderr}` : errBody.stderr;
+      } catch { /* not JSON */ }
+      throw { kind: 'server', message: detail || `bd-server returned ${res.status}`, status: res.status } satisfies BdError;
     }
-    const json = (await res.json()) as BdResponse<T>;
-    if (!json.ok || json.data === undefined) {
-      throw { kind: 'parse', message: json.error?.message ?? 'unexpected response shape' } satisfies BdError;
-    }
-    return json.data;
+    return (await res.json()) as T;
   };
 
   try {
