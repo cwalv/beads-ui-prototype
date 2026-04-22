@@ -118,7 +118,7 @@ Wisps need a visible distinguishing mark (badge or watermark) since they don't b
 ## Out of scope
 
 - Implementation framework choice (React/Svelte/Elm/...).
-- Live data API the UI talks to. Tracked under `fo-beads-ui-api-spec`.
+- Live data API the UI talks to. Tracked under `fo-beads-ui-api-spec`. Backend design (bd-server RPC wrapper, formula file I/O, subcommand whitelist, deployment) specced in `cwalv/bd-server/DESIGN.md` (`fo-bd-server-spec`).
 - Auth / multi-writer story. Same bead.
 - The interactive prototype itself. Driven via Claude Design; see `prototype-v1/`.
 
