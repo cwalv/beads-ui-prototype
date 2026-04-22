@@ -101,7 +101,7 @@
 .ed-dag-head .meta.err { color: var(--danger); }
 
 .ed-dag-canvas {
-  flex: 1; position: relative; overflow: auto;
+  flex: 1; min-width: 0; position: relative; overflow: auto;
   background:
     radial-gradient(circle, var(--rule-2) 1px, transparent 1px) 0 0 / 18px 18px,
     var(--bg-2);
