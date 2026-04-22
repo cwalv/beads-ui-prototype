@@ -21,17 +21,6 @@ import type { Destination } from '../../types';
 const VALID_TABS = ['source', 'cook', 'instances'] as const;
 type Tab = typeof VALID_TABS[number];
 
-// Mayor decision Q8: formula dir is derived from the formulaName prefix up to the first "/",
-// or defaults to "local" when no slash present.
-// The URL encodes the full <dir>/<name> as formulaName param, URL-encoded.
-// e.g. /author/edit/gastownhall-upstream/source → dir="local", name="gastownhall-upstream"
-// e.g. /author/edit/foo~bar~gastownhall-upstream/source where "~" separates dir from name
-// For v1: dir defaults to the active workspace name (bd-server resolves it to the configured dir).
-function parseFormulaParam(formulaName: string): { dir: string; name: string } {
-  // Convention: formulaName is the raw name; dir is the workspace name (passed separately)
-  return { dir: 'local', name: formulaName };
-}
-
 export const handle = {
   destination: 'author' as Destination,
   breadcrumb: ['author', 'edit'],
@@ -47,8 +36,11 @@ export default function AuthorEdit() {
   }
 
   const currentTab = tab as Tab;
-  const { dir, name } = parseFormulaParam(formulaName);
   const wsName = workspace?.name ?? null;
+  // bd-server's GET /v1/formulas/<dir>/<name> resolves dir against [formula_dirs]
+  // in bd-server config. Convention: the workspace name doubles as the formula_dir name.
+  const dir = wsName;
+  const name = formulaName;
 
   const {
     current, setCurrent, loading, loadError,
