@@ -1,0 +1,16 @@
+{
+  "workspaces": [
+    {
+      "name": "fo-beads-ui",
+      "path": "/home/cwa/weaveroot/foundations",
+      "description": "beads UI project",
+      "color": "#2f6fe8"
+    },
+    {
+      "name": "demo",
+      "path": "/tmp/demo-beads",
+      "description": "Demo workspace",
+      "color": "#2d7a4a"
+    }
+  ]
+}
