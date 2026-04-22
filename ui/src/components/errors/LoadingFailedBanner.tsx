@@ -1,5 +1,5 @@
 interface Props {
-  kind: 'workspaces' | 'molecule-graph' | 'fleet' | 'formula-source';
+  kind: 'workspaces' | 'molecule-graph' | 'fleet' | 'formula-source' | 'formula-list';
   onRetry?: () => void;
   moleculeId?: string;
   formulaName?: string;
@@ -12,6 +12,7 @@ const MESSAGES: Record<Props['kind'], string | ((props: Props) => string)> = {
   fleet: 'Could not load live molecules — bd-server may be unavailable.',
   'formula-source': (p: Props) =>
     `Could not load formula${p.formulaName ? ` "${p.formulaName}"` : ''} — bd-server may be unavailable.`,
+  'formula-list': 'Could not load formula catalog — bd-server may be unavailable.',
 };
 
 export function LoadingFailedBanner({ kind, onRetry, moleculeId, formulaName }: Props) {

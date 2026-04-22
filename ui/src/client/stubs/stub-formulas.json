@@ -1,0 +1,98 @@
+[
+  {
+    "name": "cooking",
+    "type": "workflow",
+    "description": "Generic cooking workflow",
+    "source": "/stub/.beads/formulas/cooking.formula.toml",
+    "steps": 5,
+    "vars": 0
+  },
+  {
+    "name": "gastownhall-upstream",
+    "type": "workflow",
+    "description": "Upstream-submission lifecycle for external contributions",
+    "source": "/stub/.beads/formulas/gastownhall-upstream.formula.toml",
+    "steps": 8,
+    "vars": 11
+  },
+  {
+    "name": "gastownhall-upstream-followup",
+    "type": "workflow",
+    "description": "Follow-up cycle for an already-submitted upstream PR",
+    "source": "/stub/.beads/formulas/gastownhall-upstream-followup.formula.toml",
+    "steps": 7,
+    "vars": 9
+  },
+  {
+    "name": "mol-do-work",
+    "type": "workflow",
+    "description": "Simple work formula — read the bead, do what it says, close it",
+    "source": "/stub/.beads/formulas/mol-do-work.formula.toml",
+    "steps": 2,
+    "vars": 1
+  },
+  {
+    "name": "mol-polecat-base",
+    "type": "workflow",
+    "description": "Polecat base formula — shared steps for all polecat work",
+    "source": "/stub/.beads/formulas/mol-polecat-base.formula.toml",
+    "steps": 5,
+    "vars": 7
+  },
+  {
+    "name": "mol-polecat-commit",
+    "type": "workflow",
+    "description": "Polecat direct-commit variant — commits directly to base branch",
+    "source": "/stub/.beads/formulas/mol-polecat-commit.formula.toml",
+    "steps": 2,
+    "vars": 0
+  },
+  {
+    "name": "mol-scoped-work",
+    "type": "workflow",
+    "description": "Graph-first worktree lifecycle.",
+    "source": "/stub/.beads/formulas/mol-scoped-work.formula.toml",
+    "steps": 8,
+    "vars": 7
+  },
+  {
+    "name": "mol-weave-base",
+    "type": "workflow",
+    "description": "Weave-base formula — shared workspace lifecycle",
+    "source": "/stub/.beads/formulas/mol-weave-base.formula.toml",
+    "steps": 2,
+    "vars": 3
+  },
+  {
+    "name": "mol-weave-do-work",
+    "type": "workflow",
+    "description": "Weave-do-work formula — adds code-authoring steps (preflight, implement, review)",
+    "source": "/stub/.beads/formulas/mol-weave-do-work.formula.toml",
+    "steps": 3,
+    "vars": 4
+  },
+  {
+    "name": "mol-weave-refinery",
+    "type": "workflow",
+    "description": "Weave-refinery patrol loop",
+    "source": "/stub/.beads/formulas/mol-weave-refinery.formula.toml",
+    "steps": 8,
+    "vars": 9
+  },
+  {
+    "name": "mol-weave-work",
+    "type": "workflow",
+    "description": "Weave-work lifecycle — peer workweave + author code + refinery patrol",
+    "source": "/stub/.beads/formulas/mol-weave-work.formula.toml",
+    "steps": 1,
+    "vars": 0
+  },
+  {
+    "name": "pancakes",
+    "type": "workflow",
+    "description": "Make pancakes from scratch",
+    "source": "/stub/.beads/formulas/pancakes.formula.toml",
+    "steps": 5,
+    "vars": 0
+  }
+]

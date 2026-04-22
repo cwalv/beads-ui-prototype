@@ -4,8 +4,29 @@
 // Instances via POST /bd → bd list
 
 import { bdClient } from './bd';
+import stubFormulas from './stubs/stub-formulas.json';
 
 const BASE_URL = import.meta.env.VITE_BD_SERVER_URL as string | undefined;
+
+export interface FormulaListItem {
+  name: string;
+  type: string;
+  description: string;
+  source: string;
+  steps: number;
+  vars: number;
+}
+
+export async function listFormulas(
+  workspace: string,
+  signal?: AbortSignal,
+): Promise<FormulaListItem[]> {
+  if (!BASE_URL) return stubFormulas as FormulaListItem[];
+  return bdClient.fetch<FormulaListItem[]>(
+    ['formula', 'list'],
+    { workspace, signal },
+  );
+}
 
 export interface FormulaSource {
   raw: string;
@@ -99,7 +120,7 @@ export async function cookFormula(
     if (v) varArgs.push('--var', `${k}=${v}`);
   });
   const result = await bdClient.fetch<CookResult>(
-    ['cook', formulaName, '--mode=runtime', ...varArgs, '--json'],
+    ['cook', formulaName, '--mode=runtime', ...varArgs],
     { workspace, signal },
   );
   return result.steps ?? [];
@@ -111,7 +132,7 @@ export async function listInstances(
   signal?: AbortSignal,
 ): Promise<FormulaInstance[]> {
   return bdClient.fetch<FormulaInstance[]>(
-    ['list', '--type=molecule', `--metadata-field`, `gc.formula=${formulaName}`, '--json'],
+    ['list', '--type=molecule', `--metadata-field`, `gc.formula=${formulaName}`],
     { workspace, signal },
   );
 }
