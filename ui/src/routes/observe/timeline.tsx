@@ -1,5 +1,8 @@
+// fo-zz4pz §3: per-molecule execution history stub
 import { useParams } from 'react-router-dom';
 import { useSetFooter } from '../../hooks/useSetFooter';
+import { StubBanner } from '../../components/chrome/StubBanner';
+import { ObserveNav } from '../../components/observe/ObserveNav';
 import type { Destination } from '../../types';
 
 export const handle = {
@@ -9,13 +12,16 @@ export const handle = {
 
 export default function ObserveTimeline() {
   const { moleculeId = '' } = useParams<{ moleculeId: string }>();
-  useSetFooter(`${moleculeId} · history`, 'Observe · Timeline · tick 100ms');
+  useSetFooter(`${moleculeId} · history`, 'Observe · Timeline');
   return (
-    <div className="placeholder-dest">
-      <span className="dest-name">Observe · Timeline</span>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ink-3)' }}>{moleculeId}</span>
-      <span style={{ color: 'var(--ink-3)', fontSize: 13 }}>Molecule execution history — coming soon</span>
-      <span className="dest-bead">→ fo-beads-ui-observe-graph</span>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <ObserveNav active="timeline" moleculeId={moleculeId} />
+      <StubBanner
+        title="Observe · Timeline"
+        description="Per-molecule execution history — one row per tick / step transition."
+        bead="fo-zz4pz"
+        prototypeRef="prototype-v1/wf-v2.jsx:ObserveTimeline"
+      />
     </div>
   );
 }

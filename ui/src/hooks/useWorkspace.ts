@@ -7,7 +7,7 @@ export interface WorkspaceState {
   loading: boolean;
   error: string | null;
   isStub: boolean;
-  isConsolidated: boolean;
+  isConsolidated: boolean; // TODO fo-zz4pz §10: consolidated mode merges results across workspaces — most surfaces don't yet implement the multi-db query
   setCurrent: (name: string) => void;
   setConsolidated: (on: boolean) => void;
   retry: () => void;

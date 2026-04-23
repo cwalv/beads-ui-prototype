@@ -38,7 +38,8 @@ export function FleetRow({ molecule, onSelect }: Props) {
       onClick={() => onSelect(molecule.id)}
       style={{
         display: 'grid',
-        gridTemplateColumns: '4px 120px 110px 1fr 200px 90px 60px',
+        // fo-zz4pz §6: wisp-badge-slot column reserved for future wisp badge (see fo-zz4pz §6)
+        gridTemplateColumns: '4px 120px 110px 1fr 200px 90px 60px 28px',
         alignItems: 'center',
         borderBottom: '1px solid var(--rule-2)',
         fontSize: 11.5,
@@ -148,6 +149,9 @@ export function FleetRow({ molecule, onSelect }: Props) {
       }}>
         {formatAge(molecule.createdAt)}
       </div>
+
+      {/* fo-zz4pz §6: wisp badge slot — empty until wisp UI is designed and bd-server exposes wisp/molecule distinction */}
+      <span className="wisp-badge-slot" aria-hidden="true" />
     </div>
   );
 }

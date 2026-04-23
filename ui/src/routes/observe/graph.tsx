@@ -8,6 +8,7 @@ import { GraphFilterRail } from '../../components/observe/GraphFilterRail';
 import { PeekDrawer } from '../../components/chrome/PeekDrawer';
 import { IssuePeekBody } from '../../components/peek/IssuePeekBody';
 import { LoadingFailedBanner } from '../../components/errors/LoadingFailedBanner';
+import { ObserveNav } from '../../components/observe/ObserveNav';
 import type { Destination, BeadStatus } from '../../types';
 
 export const handle = {
@@ -49,6 +50,7 @@ export default function ObserveGraph() {
   if (error) {
     return (
       <div className="observe-graph" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <ObserveNav active="graph" moleculeId={moleculeId} />
         <LoadingFailedBanner kind="molecule-graph" onRetry={refresh} moleculeId={moleculeId} />
       </div>
     );
@@ -56,15 +58,20 @@ export default function ObserveGraph() {
 
   if (!moleculeId) {
     return (
-      <div className="placeholder-dest">
-        <span className="dest-name">Observe · Graph</span>
-        <span style={{ color: 'var(--ink-3)', fontSize: 13 }}>No molecule selected</span>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <ObserveNav active="graph" />
+        <div className="placeholder-dest">
+          <span className="dest-name">Observe · Graph</span>
+          <span style={{ color: 'var(--ink-3)', fontSize: 13 }}>No molecule selected</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', minHeight: 0, background: 'var(--bg-2)' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <ObserveNav active="graph" moleculeId={moleculeId} />
+      <div style={{ flex: 1, display: 'flex', minHeight: 0, background: 'var(--bg-2)' }}>
       <GraphFilterRail
         nodes={graph?.nodes ?? []}
         hiddenStatuses={hiddenStatuses}
@@ -136,6 +143,7 @@ export default function ObserveGraph() {
           <IssuePeekBody beadId={peekId} onClose={close} onNodePatch={patchNode} />
         </PeekDrawer>
       )}
+    </div>
     </div>
   );
 }

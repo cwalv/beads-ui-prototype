@@ -4,6 +4,7 @@ import { useSetFooter } from '../../hooks/useSetFooter';
 import { useWorkspace } from '../../hooks/useWorkspace';
 import { createBead } from '../../client/bead';
 import { addDep } from '../../client/bead';
+import { StubBanner } from '../../components/chrome/StubBanner';
 import type { Destination, BeadType, DepType, Bead } from '../../types';
 
 export const handle = {
@@ -60,6 +61,8 @@ export default function Capture() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [lastCreated, setLastCreated] = useState<string | null>(null);
+  // fo-zz4pz §5: Expand to epic dialog state
+  const [epicDialogOpen, setEpicDialogOpen] = useState(false);
 
   const titleRef = useRef<HTMLInputElement>(null);
   const submitRef = useRef<((andNew: boolean) => Promise<void>) | null>(null);
@@ -414,6 +417,33 @@ export default function Capture() {
               </div>
             </div>
           </div>
+
+          {/* fo-zz4pz §5: Expand to epic — stub button for the second-click formula-pour action */}
+          <div style={{ marginTop: 28, paddingTop: 18, borderTop: '1px solid var(--rule-2)' }}>
+            <button
+              onClick={() => setEpicDialogOpen(true)}
+              style={{
+                padding: '8px 18px',
+                fontSize: 12,
+                fontFamily: 'var(--font-sans)',
+                border: '1px solid var(--rule)',
+                borderRadius: 2,
+                background: 'var(--bg)',
+                color: 'var(--ink-3)',
+                cursor: 'pointer',
+              }}
+            >
+              Expand to epic …
+            </button>
+            <span style={{
+              marginLeft: 10,
+              fontSize: 10.5,
+              color: 'var(--mute)',
+              fontFamily: 'var(--font-mono)',
+            }}>
+              pour a formula to turn this bead into a molecule
+            </span>
+          </div>
         </div>
 
         {/* Right rail */}
@@ -524,6 +554,41 @@ export default function Capture() {
           </div>
         </div>
       </div>
+
+      {/* fo-zz4pz §5: Expand to epic stub dialog */}
+      {epicDialogOpen && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
+          }}
+          onClick={() => setEpicDialogOpen(false)}
+        >
+          <div
+            style={{
+              background: 'var(--bg)', borderRadius: 4, border: '1px solid var(--rule)',
+              maxWidth: 560, width: '90%', position: 'relative', overflow: 'hidden',
+              display: 'flex', flexDirection: 'column',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setEpicDialogOpen(false)}
+              aria-label="Close"
+              style={{
+                position: 'absolute', top: 10, right: 10, background: 'none', border: 'none',
+                color: 'var(--mute)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '2px 6px',
+              }}
+            >×</button>
+            <StubBanner
+              title="Expand to epic"
+              description="Second-click action that pours a formula, turning a captured bead into a molecule."
+              bead="fo-zz4pz"
+              prototypeRef="UI-DESIGN.md §Capture"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

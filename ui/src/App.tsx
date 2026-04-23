@@ -1,7 +1,9 @@
 import { Suspense, lazy, useState, useCallback, useEffect } from 'react';
+import './styles/learn.css';
 import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { TopChrome } from './components/chrome/TopChrome';
 import { FootBar } from './components/chrome/FootBar';
+import { CommandPalette } from './components/palette/CommandPalette';
 import { NotFound } from './components/errors/NotFound';
 import { ErrorBoundary } from './components/errors/ErrorBoundary';
 import { WorkspaceContext } from './hooks/useWorkspace';
@@ -18,8 +20,12 @@ const ObserveIndex  = lazy(() => import('./routes/observe/index'));
 const ObserveFleet  = lazy(() => import('./routes/observe/fleet'));
 const ObserveGraph  = lazy(() => import('./routes/observe/graph'));
 const ObserveTimeline = lazy(() => import('./routes/observe/timeline'));
+const ObserveQueue  = lazy(() => import('./routes/observe/queue'));
 const Capture       = lazy(() => import('./routes/capture/index'));
 const BeadRoute     = lazy(() => import('./routes/bead/index'));
+const DocsIndex     = lazy(() => import('./routes/docs/index'));
+const DocsFile      = lazy(() => import('./routes/docs/file'));
+const ArchitectureStub = lazy(() => import('./routes/architecture/index'));
 
 const STUB_URL = import.meta.env.VITE_BD_SERVER_URL as string | undefined;
 
@@ -86,9 +92,23 @@ function DefaultRedirect() {
 }
 
 function AppShell() {
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setPaletteOpen(o => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   return (
     <div className="app-shell">
-      <TopChrome />
+      <TopChrome onOpenPalette={() => setPaletteOpen(true)} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <div className="destination-body">
         <ErrorBoundary>
           <Suspense fallback={<div className="placeholder-dest"><span style={{ color: 'var(--mute)' }}>Loading…</span></div>}>
@@ -98,12 +118,16 @@ function AppShell() {
               <Route path="/author/browse" element={<AuthorBrowse />} />
               <Route path="/author/edit/:formulaName" element={<AuthorEdit />} />
               <Route path="/author/edit/:formulaName/:tab" element={<AuthorEdit />} />
+              <Route path="/architecture" element={<ArchitectureStub />} />
               <Route path="/observe" element={<ObserveIndex />} />
               <Route path="/observe/fleet" element={<ObserveFleet />} />
               <Route path="/observe/graph/:moleculeId" element={<ObserveGraph />} />
               <Route path="/observe/timeline/:moleculeId" element={<ObserveTimeline />} />
+              <Route path="/observe/queue" element={<ObserveQueue />} />
               <Route path="/capture" element={<Capture />} />
               <Route path="/bead/:beadId" element={<BeadRoute />} />
+              <Route path="/docs" element={<DocsIndex />} />
+              <Route path="/docs/:slug" element={<DocsFile />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

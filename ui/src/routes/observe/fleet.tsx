@@ -1,3 +1,4 @@
+// fo-zz4pz §6: wisp badge slot is reserved in FleetRow (wisp-badge-slot column) — see FleetRow.tsx
 import { useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSetFooter } from '../../hooks/useSetFooter';
@@ -7,6 +8,7 @@ import { FleetSummary, type GroupBy } from '../../components/observe/FleetSummar
 import { FleetGroupHeader } from '../../components/observe/FleetGroupHeader';
 import { FleetRow } from '../../components/observe/FleetRow';
 import { LoadingFailedBanner } from '../../components/errors/LoadingFailedBanner';
+import { ObserveNav } from '../../components/observe/ObserveNav';
 import type { Destination } from '../../types';
 import type { FleetMolecule } from '../../client/fleet';
 
@@ -80,15 +82,19 @@ export default function ObserveFleet() {
 
   if (!current && !isConsolidated) {
     return (
-      <div className="placeholder-dest">
-        <span className="dest-name">Observe · Fleet</span>
-        <span style={{ color: 'var(--ink-3)', fontSize: 13 }}>Select a workspace to see live molecules.</span>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <ObserveNav active="fleet" />
+        <div className="placeholder-dest">
+          <span className="dest-name">Observe · Fleet</span>
+          <span style={{ color: 'var(--ink-3)', fontSize: 13 }}>Select a workspace to see live molecules.</span>
+        </div>
       </div>
     );
   }
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <ObserveNav active="fleet" />
       <FleetSummary
         molecules={molecules}
         groupBy={groupBy}
