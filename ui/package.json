@@ -13,6 +13,9 @@
   },
   "dependencies": {
     "@panzoom/panzoom": "^4.6.2",
+    "@types/dagre": "^0.7.54",
+    "dagre": "^0.8.5",
+    "marked": "^18.0.2",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "react-router-dom": "^6.26.0"

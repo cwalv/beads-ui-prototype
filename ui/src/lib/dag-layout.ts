@@ -1,12 +1,33 @@
 // DAG layout algorithm for formula steps.
 // Produces positioned nodes and routed edges for SVG rendering.
 
+import dagre from 'dagre';
 import type { Step } from './formula-parse';
 
-const NODE_W = 240;
-const NODE_H_BASE = 72;
+export const NODE_W = 240;
 const COL_GAP = 72;
 const ROW_GAP = 24;
+
+// Per-node height is estimated from title length (so longer step titles get
+// taller cards instead of being clipped). Header band + per-line title height
+// + padding + optional badge row.
+const NODE_HEADER_H = 28;
+const NODE_TITLE_LINE_H = 17;     // ~12px font * 1.4 line-height
+const NODE_BOTTOM_PAD = 10;
+const NODE_BADGE_H = 26;
+const TITLE_CHARS_PER_LINE = 28;  // 240px - padding @ 12px monospace-ish ≈ 28 chars
+const MAX_TITLE_LINES = 5;        // cap so a runaway title can't push everything sideways
+
+function estimateTitleLines(title: string | null): number {
+  if (!title) return 1;
+  return Math.max(1, Math.min(MAX_TITLE_LINES, Math.ceil(title.length / TITLE_CHARS_PER_LINE)));
+}
+
+function estimateHeight(s: Step): number {
+  const badges = (s.retry ? 1 : 0) + (s.metadata && Object.keys(s.metadata).length ? 1 : 0);
+  const titleLines = estimateTitleLines(s.title);
+  return NODE_HEADER_H + titleLines * NODE_TITLE_LINE_H + NODE_BOTTOM_PAD + (badges > 0 ? NODE_BADGE_H : 0);
+}
 
 export interface DAGNode {
   x: number;
@@ -29,69 +50,61 @@ export interface DAGLayout {
 }
 
 export function layoutDAG(steps: Step[]): DAGLayout {
-  const byId = Object.fromEntries(steps.filter(s => s.id).map(s => [s.id!, s]));
-  const rank: Record<string, number> = {};
+  const validSteps = steps.filter(s => s.id);
 
-  function getRank(id: string, visiting = new Set<string>()): number {
-    if (rank[id] !== undefined) return rank[id];
-    if (visiting.has(id)) return 0;
-    visiting.add(id);
-    const s = byId[id];
-    if (!s || !s.needs.length) { rank[id] = 0; return 0; }
-    const r = Math.max(...s.needs.map(n => byId[n] ? getRank(n, visiting) + 1 : 0));
-    rank[id] = r;
-    visiting.delete(id);
-    return r;
+  if (validSteps.length === 0) {
+    return { nodes: {}, edges: [], cols: [], totalW: 0, totalH: 0 };
   }
-  Object.keys(byId).forEach(id => getRank(id));
-
-  const cols: (string[] | undefined)[] = [];
-  Object.entries(rank).forEach(([id, r]) => {
-    if (!cols[r]) cols[r] = [];
-    cols[r]!.push(id);
-  });
-
-  const orderById = Object.fromEntries(steps.filter(s => s.id).map((s, i) => [s.id!, i]));
-  cols.forEach(c => c && c.sort((a, b) => orderById[a] - orderById[b]));
 
   const heights: Record<string, number> = {};
-  steps.forEach(s => {
-    if (!s.id) return;
-    const badges = (s.retry ? 1 : 0) + (s.metadata && Object.keys(s.metadata).length ? 1 : 0);
-    heights[s.id] = NODE_H_BASE + (badges > 0 ? 26 : 0);
+  validSteps.forEach(s => { heights[s.id!] = estimateHeight(s); });
+
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({ rankdir: 'LR', nodesep: ROW_GAP, ranksep: COL_GAP, marginx: 20, marginy: 20 });
+  g.setDefaultEdgeLabel(() => ({}));
+
+  validSteps.forEach(s => {
+    g.setNode(s.id!, { width: NODE_W, height: heights[s.id!] });
   });
 
-  const nodes: Record<string, DAGNode> = {};
-  cols.forEach((col, ci) => {
-    if (!col) return;
-    let y = 20;
-    col.forEach(id => {
-      nodes[id] = { x: 20 + ci * (NODE_W + COL_GAP), y, w: NODE_W, h: heights[id] ?? NODE_H_BASE };
-      y += (heights[id] ?? NODE_H_BASE) + ROW_GAP;
-    });
-  });
-
-  const colHeights = cols.map(col => {
-    if (!col) return 0;
-    return col.reduce((acc, id) => acc + (heights[id] ?? NODE_H_BASE) + ROW_GAP, 0) - ROW_GAP;
-  });
-  const maxColH = Math.max(...colHeights, 0);
-  cols.forEach((col, ci) => {
-    if (!col) return;
-    const offset = Math.max(0, (maxColH - colHeights[ci]) / 2);
-    col.forEach(id => { nodes[id].y += offset; });
-  });
-
+  // Collect edges, skipping any that would create a cycle (best-effort safety).
   const edges: DAGEdge[] = [];
-  steps.forEach(s => {
-    if (!s.id) return;
+  validSteps.forEach(s => {
     s.needs.forEach(n => {
-      if (nodes[n] && nodes[s.id!]) edges.push({ from: n, to: s.id! });
+      if (heights[n] !== undefined) {
+        g.setEdge(n, s.id!);
+        edges.push({ from: n, to: s.id! });
+      }
     });
   });
 
-  const totalW = (cols.length || 1) * (NODE_W + COL_GAP) + 20;
-  const totalH = maxColH + 40;
+  try {
+    dagre.layout(g);
+  } catch {
+    // Cycle or other layout error — fall back to empty positioning.
+    return { nodes: {}, edges: [], cols: [], totalW: 0, totalH: 0 };
+  }
+
+  // Dagre returns center-based coordinates; convert to top-left.
+  const nodes: Record<string, DAGNode> = {};
+  g.nodes().forEach(id => {
+    const n = g.node(id);
+    nodes[id] = { x: n.x - n.width / 2, y: n.y - n.height / 2, w: n.width, h: n.height };
+  });
+
+  const graphInfo = g.graph();
+  const totalW = (graphInfo.width ?? 0) + 40;
+  const totalH = (graphInfo.height ?? 0) + 40;
+
+  // Derive cols from dagre ranks for interface compatibility (nothing consumes this).
+  const rankMap: Record<number, string[]> = {};
+  g.nodes().forEach(id => {
+    const r = (g.node(id) as { rank?: number }).rank ?? 0;
+    if (!rankMap[r]) rankMap[r] = [];
+    rankMap[r].push(id);
+  });
+  const maxRank = Math.max(...Object.keys(rankMap).map(Number), -1);
+  const cols: (string[] | undefined)[] = Array.from({ length: maxRank + 1 }, (_, i) => rankMap[i]);
 
   return { nodes, edges, cols, totalW, totalH };
 }
