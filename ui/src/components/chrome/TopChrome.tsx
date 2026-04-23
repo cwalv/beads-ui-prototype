@@ -1,6 +1,7 @@
 import { useState, useContext } from 'react';
 import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
 import { useDestination } from '../../hooks/useDestination';
+import { useDocMode } from '../../hooks/useDocMode';
 import { DirtyContext } from '../../hooks/useSetDirty';
 import { WorkspaceContext } from '../../hooks/useWorkspace';
 import { WorkspaceSwitcher } from '../switcher/WorkspaceSwitcher';
@@ -10,19 +11,25 @@ const DESTS: { id: Destination; label: string; hint: string }[] = [
   { id: 'author',  label: 'Author',  hint: 'formulas · workflow' },
   { id: 'observe', label: 'Observe', hint: 'molecules · beads' },
   { id: 'capture', label: 'Capture', hint: 'add work' },
+  { id: 'docs',    label: 'Learn',   hint: 'docs · palette · ?' },
 ];
 
 function pathToBreadcrumb(pathname: string): string[] {
   return pathname.split('/').filter(Boolean);
 }
 
-export function TopChrome() {
+interface Props {
+  onOpenPalette?: () => void;
+}
+
+export function TopChrome({ onOpenPalette }: Props) {
   const destination = useDestination();
   const dirtyCtx = useContext(DirtyContext);
   const wsCtx = useContext(WorkspaceContext);
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const { docMode, toggleDocMode } = useDocMode();
 
   const breadcrumb = pathToBreadcrumb(location.pathname);
   const ws = wsCtx?.current;
@@ -41,10 +48,12 @@ export function TopChrome() {
         </NavLink>
 
         <div
-          className="ws-pill"
+          className={`ws-pill${switcherOpen ? ' open' : ''}`}
           title="Switch workspace (⌘,)"
           onClick={() => setSwitcherOpen(o => !o)}
           style={{ cursor: 'pointer' }}
+          aria-haspopup="listbox"
+          aria-expanded={switcherOpen}
         >
           <span className="ws-bar" style={{ background: wsColor }} />
           <span className="ws-name">{wsName}</span>
@@ -52,13 +61,15 @@ export function TopChrome() {
           {isStub && (
             <span className="ws-stub-dot" title="Running against stubbed workspace list — bd-server not configured" />
           )}
-          <span className="ws-caret">▾</span>
+          <span className="ws-caret">{switcherOpen ? '▴' : '▾'}</span>
         </div>
 
         <nav className="dest-tabs">
           {DESTS.map(d => {
             const search = searchParams.toString();
-            const to = `/${d.id}${search ? `?${search}` : ''}`;
+            const to = d.id === 'docs'
+              ? `/docs`
+              : `/${d.id}${search ? `?${search}` : ''}`;
             return (
               <NavLink
                 key={d.id}
@@ -86,7 +97,24 @@ export function TopChrome() {
 
         <span className="spacer" />
 
-        <div className="search-pill" title="Press to open command palette">
+        <button
+          className={`doc-mode-btn${docMode ? ' active' : ''}`}
+          title={docMode ? 'Exit doc mode (?)' : 'Toggle doc mode (?)'}
+          onClick={toggleDocMode}
+          aria-pressed={docMode}
+        >
+          ?
+        </button>
+
+        <div
+          className="search-pill"
+          title="Press to open command palette (⌘K)"
+          onClick={onOpenPalette}
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onOpenPalette?.(); }}
+          style={{ cursor: 'pointer' }}
+        >
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5 }}>⌕</span>
           <span style={{ fontSize: 11 }}>Search or run command</span>
           <span className="kbd-inline">⌘K</span>

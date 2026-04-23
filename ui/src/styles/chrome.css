@@ -58,7 +58,14 @@
   cursor: default;
   height: 26px;
   position: relative;
+  transition: border-color 80ms, background 80ms;
 }
+.ws-pill:hover { border-color: var(--mute); }
+.ws-pill.open {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.ws-pill.open .ws-caret { color: var(--accent); }
 
 .ws-pill .ws-bar {
   width: 3px;

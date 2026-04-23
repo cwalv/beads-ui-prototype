@@ -1,4 +1,4 @@
-export type Destination = 'author' | 'observe' | 'capture';
+export type Destination = 'author' | 'observe' | 'capture' | 'docs';
 
 export interface Workspace {
   name: string;
