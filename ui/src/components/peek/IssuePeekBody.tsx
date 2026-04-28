@@ -1,17 +1,59 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Bead, DepType } from '../../types';
 import { getBead, updateBead, addComment, addDep, removeDep } from '../../client/bead';
+import { useOpenPeek } from '../../hooks/usePeek';
 
 interface Props {
   beadId: string;
   onClose: () => void;
   onNodePatch?: (id: string, patch: Partial<{ title: string; status: string; priority: number }>) => void;
+  onBeadLoaded?: (bead: Bead) => void;
 }
 
-type Tab = 'Overview' | 'Deps' | 'Comments' | 'Events';
-const TABS: Tab[] = ['Overview', 'Deps', 'Comments', 'Events'];
+type Tab = 'Overview' | 'Deps' | 'Comments' | 'Metadata' | 'Events';
 
-const DEP_TYPES: DepType[] = ['tracks', 'blocks', 'parent-child', 'waits-for', 'conditional-blocks', 'related', 'discovered-from'];
+// Full canonical dep-type set (matches `DepType` in types/index.ts).
+// Convention library (fo-0qdg9) may eventually slice this per workspace,
+// but for now show all 19 since bd accepts any of them.
+const DEP_TYPES: DepType[] = [
+  'blocks', 'parent-child', 'conditional-blocks', 'waits-for',
+  'related', 'discovered-from',
+  'replies-to', 'relates-to', 'duplicates', 'supersedes',
+  'authored-by', 'assigned-to', 'approved-by', 'attests',
+  'tracks',
+  'until', 'caused-by', 'validates',
+  'delegated-from',
+];
+
+const STATUS_OPTIONS = ['open', 'in_progress', 'blocked', 'deferred', 'closed', 'pinned', 'hooked'];
+
+// Stand-in friendly labels for well-known metadata keys. The convention
+// library (fo-0qdg9) will replace this with detect-then-pack lookup; for
+// now we inline the gascity gc.* set plus the gastown delegated_from key
+// so peek can render something more useful than raw blobs.
+const METADATA_LABELS: Record<string, string> = {
+  'gc.kind': 'kind',
+  'gc.routed_to': 'routed to',
+  'gc.attempt': 'attempt',
+  'gc.molecule_id': 'molecule id',
+  'gc.continuation_group': 'continuation group',
+  'gc.step_ref': 'step ref',
+  'gc.role_session': 'role session',
+  'gc.completed_session': 'completed session',
+  'gc.from': 'from',
+  'gc.to': 'to',
+  'gc.priority': 'gc priority',
+  'gc.is_phase_2': 'phase 2',
+  'gc.parent_session': 'parent session',
+  'gc.target_session': 'target session',
+  'gc.template': 'template',
+  'gc.gate': 'gate',
+  'delegated_from': 'delegated from',
+};
+
+function metadataLabel(key: string): string {
+  return METADATA_LABELS[key] ?? key;
+}
 
 function Shimmer() {
   return (
@@ -24,7 +66,7 @@ function Shimmer() {
 }
 
 function KVRow({ label, value }: { label: string; value: React.ReactNode }) {
-  if (!value && value !== 0) return null;
+  if (value === null || value === undefined || value === '') return null;
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: 8, padding: '4px 0', alignItems: 'start' }}>
       <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--mute)', paddingTop: 1 }}>{label}</span>
@@ -33,7 +75,54 @@ function KVRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--mute)', marginBottom: 4 }}>{title}</div>
+      <div style={{ fontSize: 12.5, color: 'var(--ink)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{children}</div>
+    </div>
+  );
+}
+
+function formatDate(s?: string): string | undefined {
+  if (!s) return undefined;
+  return s.replace('T', ' ').replace(/\..*$/, '').replace(/Z$/, '');
+}
+
+function MetadataValue({ value }: { value: unknown }) {
+  if (value === null || value === undefined) {
+    return <span style={{ color: 'var(--mute)', fontStyle: 'italic' }}>—</span>;
+  }
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{String(value)}</span>;
+  }
+  return (
+    <pre style={{
+      margin: 0,
+      fontFamily: 'var(--font-mono)',
+      fontSize: 11,
+      color: 'var(--ink-2)',
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'break-word',
+    }}>{JSON.stringify(value, null, 2)}</pre>
+  );
+}
+
+function diffLabels(before: string[], after: string[]): { add: string[]; remove: string[] } {
+  const beforeSet = new Set(before);
+  const afterSet = new Set(after);
+  return {
+    add: after.filter(l => !beforeSet.has(l)),
+    remove: before.filter(l => !afterSet.has(l)),
+  };
+}
+
+function parseLabels(s: string): string[] {
+  return s.split(',').map(l => l.trim()).filter(l => l.length > 0);
+}
+
+export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch, onBeadLoaded }: Props) {
+  const { open: openPeek } = useOpenPeek();
   const [bead, setBead] = useState<Bead | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -48,11 +137,13 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
   const [editStatus, setEditStatus] = useState('');
   const [editPriority, setEditPriority] = useState('');
   const [editAssignee, setEditAssignee] = useState('');
+  const [editLabels, setEditLabels] = useState('');
+  const [editExternalRef, setEditExternalRef] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveFlash, setSaveFlash] = useState(false);
 
   const [newDepId, setNewDepId] = useState('');
-  const [newDepType, setNewDepType] = useState<DepType>('tracks');
+  const [newDepType, setNewDepType] = useState<DepType>('blocks');
   const [depError, setDepError] = useState<string | null>(null);
 
   const [commentBody, setCommentBody] = useState('');
@@ -64,14 +155,36 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
     try {
       const b = await getBead(beadId);
       setBead(b);
+      onBeadLoaded?.(b);
     } catch (e) {
       setFetchError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [beadId]);
+  }, [beadId, onBeadLoaded]);
 
   useEffect(() => { load(); }, [load]);
+
+  const metadataEntries = useMemo(() => {
+    const m = bead?.metadata;
+    if (!m || typeof m !== 'object') return [];
+    return Object.entries(m as Record<string, unknown>);
+  }, [bead?.metadata]);
+
+  const hasEvents = (bead?.events?.length ?? 0) > 0;
+  const hasMetadata = metadataEntries.length > 0;
+
+  const TABS: Tab[] = useMemo(() => {
+    const tabs: Tab[] = ['Overview', 'Deps', 'Comments'];
+    if (hasMetadata) tabs.push('Metadata');
+    if (hasEvents) tabs.push('Events');
+    return tabs;
+  }, [hasMetadata, hasEvents]);
+
+  // If the active tab disappears (edit removed metadata, etc.), fall back.
+  useEffect(() => {
+    if (!TABS.includes(activeTab)) setActiveTab('Overview');
+  }, [TABS, activeTab]);
 
   function startEdit() {
     if (!bead) return;
@@ -83,6 +196,8 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
     setEditStatus(bead.status ?? '');
     setEditPriority(bead.priority !== undefined ? String(bead.priority) : '');
     setEditAssignee(bead.assignee ?? '');
+    setEditLabels((bead.labels ?? []).join(', '));
+    setEditExternalRef(bead.external_ref ?? '');
     setSaveError(null);
     setEditMode(true);
   }
@@ -99,6 +214,12 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
     if (editStatus !== bead.status) patch.status = editStatus;
     if (editPriority !== '' && Number(editPriority) !== bead.priority) patch.priority = Number(editPriority);
     if (editAssignee !== (bead.assignee ?? '')) patch.assignee = editAssignee;
+    if (editExternalRef !== (bead.external_ref ?? '')) patch.externalRef = editExternalRef;
+
+    const newLabels = parseLabels(editLabels);
+    const labelDiff = diffLabels(bead.labels ?? [], newLabels);
+    if (labelDiff.add.length) patch.addLabels = labelDiff.add;
+    if (labelDiff.remove.length) patch.removeLabels = labelDiff.remove;
 
     const prevBead = bead;
     const optimistic: Bead = {
@@ -108,9 +229,11 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
       design: editDesign || undefined,
       notes: editNotes || undefined,
       acceptance_criteria: editAcceptance || undefined,
-      status: (editStatus as Bead['status']) || bead.status,
+      status: editStatus || bead.status,
       priority: editPriority !== '' ? Number(editPriority) : bead.priority,
       assignee: editAssignee || undefined,
+      external_ref: editExternalRef || undefined,
+      labels: newLabels,
     };
     setBead(optimistic);
     setEditMode(false);
@@ -119,12 +242,16 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
       await updateBead(beadId, patch);
       setSaveFlash(true);
       setTimeout(() => setSaveFlash(false), 2000);
-      if (onNodePatch) {
-        const nodePatch: Partial<{ title: string; status: string; priority: number }> = {};
-        if (patch.title !== undefined) nodePatch.title = patch.title;
-        if (patch.status !== undefined) nodePatch.status = patch.status;
-        if (patch.priority !== undefined) nodePatch.priority = patch.priority;
-        onNodePatch(beadId, nodePatch);
+      const nodePatch: Partial<{ title: string; status: string; priority: number }> = {};
+      if (patch.title !== undefined) nodePatch.title = patch.title;
+      if (patch.status !== undefined) nodePatch.status = patch.status;
+      if (patch.priority !== undefined) nodePatch.priority = patch.priority;
+      if (Object.keys(nodePatch).length > 0) {
+        if (onNodePatch) onNodePatch(beadId, nodePatch);
+        // Broadcast for peek-decoupled views (graph canvas, etc.) that
+        // mounted before the drawer and want to keep their own copy of
+        // the bead in sync.
+        window.dispatchEvent(new CustomEvent('bead-patched', { detail: { id: beadId, patch: nodePatch } }));
       }
     } catch (e) {
       setBead(prevBead);
@@ -274,32 +401,20 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
             <KVRow label="type" value={bead.type} />
             <KVRow label="priority" value={bead.priority !== undefined ? `p${bead.priority}` : undefined} />
             <KVRow label="assignee" value={bead.assignee} />
+            <KVRow label="owner" value={bead.owner} />
             <KVRow label="labels" value={bead.labels?.join(', ')} />
             <KVRow label="external ref" value={bead.external_ref} />
-            {bead.description && (
-              <div style={{ marginTop: 8 }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--mute)', marginBottom: 4 }}>description</div>
-                <div style={{ fontSize: 12.5, color: 'var(--ink)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{bead.description}</div>
-              </div>
-            )}
-            {bead.design && (
-              <div style={{ marginTop: 8 }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--mute)', marginBottom: 4 }}>design</div>
-                <div style={{ fontSize: 12.5, color: 'var(--ink)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{bead.design}</div>
-              </div>
-            )}
-            {bead.acceptance_criteria && (
-              <div style={{ marginTop: 8 }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--mute)', marginBottom: 4 }}>acceptance</div>
-                <div style={{ fontSize: 12.5, color: 'var(--ink)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{bead.acceptance_criteria}</div>
-              </div>
-            )}
-            {bead.notes && (
-              <div style={{ marginTop: 8 }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--mute)', marginBottom: 4 }}>notes</div>
-                <div style={{ fontSize: 12.5, color: 'var(--ink)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{bead.notes}</div>
-              </div>
-            )}
+            <KVRow label="created" value={formatDate(bead.created_at)} />
+            <KVRow label="updated" value={formatDate(bead.updated_at)} />
+            <KVRow label="started" value={formatDate(bead.started_at)} />
+            <KVRow label="closed" value={formatDate(bead.closed_at)} />
+            <KVRow label="due" value={formatDate(bead.due_at)} />
+            <KVRow label="defer until" value={formatDate(bead.defer_until)} />
+            <KVRow label="close reason" value={bead.close_reason} />
+            {bead.description && <Section title="description">{bead.description}</Section>}
+            {bead.design && <Section title="design">{bead.design}</Section>}
+            {bead.acceptance_criteria && <Section title="acceptance">{bead.acceptance_criteria}</Section>}
+            {bead.notes && <Section title="notes">{bead.notes}</Section>}
           </div>
         )}
 
@@ -320,9 +435,10 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
                 onChange={e => setEditStatus(e.target.value)}
                 style={{ fontSize: 12, padding: '4px 6px', border: '1px solid var(--rule)', borderRadius: 2 }}
               >
-                {['open', 'in_progress', 'blocked', 'deferred', 'closed'].map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
+                {STATUS_OPTIONS.map(s => (<option key={s} value={s}>{s}</option>))}
+                {!STATUS_OPTIONS.includes(editStatus) && editStatus !== '' && (
+                  <option value={editStatus}>{editStatus} (custom)</option>
+                )}
               </select>
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11 }}>
@@ -342,6 +458,24 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
                 value={editAssignee}
                 onChange={e => setEditAssignee(e.target.value)}
                 style={{ fontSize: 12.5, padding: '4px 6px', border: '1px solid var(--rule)', borderRadius: 2, fontFamily: 'var(--font-sans)' }}
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11 }}>
+              <span style={{ color: 'var(--mute)', fontFamily: 'var(--font-mono)' }}>labels (comma-separated)</span>
+              <input
+                value={editLabels}
+                onChange={e => setEditLabels(e.target.value)}
+                placeholder="label-a, label-b"
+                style={{ fontSize: 12.5, padding: '4px 6px', border: '1px solid var(--rule)', borderRadius: 2, fontFamily: 'var(--font-mono)' }}
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11 }}>
+              <span style={{ color: 'var(--mute)', fontFamily: 'var(--font-mono)' }}>external ref</span>
+              <input
+                value={editExternalRef}
+                onChange={e => setEditExternalRef(e.target.value)}
+                placeholder="gh-1234 / jira-FOO-456"
+                style={{ fontSize: 12.5, padding: '4px 6px', border: '1px solid var(--rule)', borderRadius: 2, fontFamily: 'var(--font-mono)' }}
               />
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11 }}>
@@ -400,7 +534,13 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
               {(bead.dependencies ?? []).map(dep => (
                 <div key={dep.id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr auto', gap: 8, padding: '3px 0', alignItems: 'center', fontSize: 12 }}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--mute)' }}>{dep.dependency_type}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-2)' }}>{dep.id}</span>
+                  <button
+                    onClick={() => openPeek(dep.id)}
+                    style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                  >
+                    {dep.id}
+                    {dep.title && <span style={{ marginLeft: 8, color: 'var(--ink-3)', fontFamily: 'var(--font-sans)' }}>{dep.title}</span>}
+                  </button>
                   <button
                     onClick={() => handleRemoveDep(dep.id)}
                     style={{ fontSize: 10, padding: '1px 5px', border: '1px solid var(--rule)', borderRadius: 2, background: 'var(--bg)', color: 'var(--danger)', cursor: 'pointer' }}
@@ -421,7 +561,13 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
               {(bead.dependents ?? []).map(dep => (
                 <div key={dep.id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: 8, padding: '3px 0', alignItems: 'center', fontSize: 12 }}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--mute)' }}>{dep.dependency_type}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-2)' }}>{dep.id}</span>
+                  <button
+                    onClick={() => openPeek(dep.id)}
+                    style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                  >
+                    {dep.id}
+                    {dep.title && <span style={{ marginLeft: 8, color: 'var(--ink-3)', fontFamily: 'var(--font-sans)' }}>{dep.title}</span>}
+                  </button>
                 </div>
               ))}
             </div>
@@ -467,7 +613,7 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
               <div key={c.id} style={{ borderBottom: '1px solid var(--rule-2)', paddingBottom: 8 }}>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 3 }}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--ink-2)' }}>{c.author ?? 'anon'}</span>
-                  {c.created_at && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--mute)' }}>{c.created_at}</span>}
+                  {c.created_at && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--mute)' }}>{formatDate(c.created_at)}</span>}
                 </div>
                 <div style={{ fontSize: 12.5, color: 'var(--ink)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{c.text}</div>
               </div>
@@ -490,17 +636,46 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
           </div>
         )}
 
+        {activeTab === 'Metadata' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 10.5, color: 'var(--mute)', fontFamily: 'var(--font-mono)' }}>
+              {metadataEntries.length} key{metadataEntries.length === 1 ? '' : 's'}
+            </div>
+            {metadataEntries.map(([k, v]) => {
+              const friendly = METADATA_LABELS[k];
+              return (
+                <div
+                  key={k}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '160px 1fr',
+                    gap: 10,
+                    padding: '4px 0',
+                    borderBottom: '1px solid var(--rule-2)',
+                    alignItems: 'start',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--mute)' }}>{k}</div>
+                    {friendly && (
+                      <div style={{ fontSize: 11, color: 'var(--ink-2)', marginTop: 1 }}>{friendly}</div>
+                    )}
+                  </div>
+                  <MetadataValue value={v} />
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {activeTab === 'Events' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {(bead.events ?? []).length === 0 && (
-              <div style={{ fontSize: 11, color: 'var(--mute)' }}>No events.</div>
-            )}
             {(bead.events ?? []).map(ev => (
               <div key={ev.id} style={{ borderBottom: '1px solid var(--rule-2)', paddingBottom: 6 }}>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 2 }}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent)', fontWeight: 600 }}>{ev.event_type}</span>
                   {ev.actor && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-2)' }}>{ev.actor}</span>}
-                  {ev.created_at && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--mute)' }}>{ev.created_at}</span>}
+                  {ev.created_at && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--mute)' }}>{formatDate(ev.created_at)}</span>}
                 </div>
                 {ev.comment && <div style={{ fontSize: 12, color: 'var(--ink-3)', whiteSpace: 'pre-wrap' }}>{ev.comment}</div>}
               </div>
@@ -511,3 +686,5 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
     </div>
   );
 }
+
+export { metadataLabel };
