@@ -57,7 +57,11 @@ message Bead {
   // message | molecule | spike | story | milestone | event. Removed but
   // commonly seen as customs: gate | convoy | merge-request | slot |
   // agent | role | rig.
-  string type = 22;
+  //
+  // bd's wire field is `issue_type` (Go: Issue.IssueType IssueType
+  // `json:"issue_type,omitempty"`). The proto field number stays 22
+  // (forever); only the JSON name needs to match bd's wire format.
+  string type = 22 [json_name = "issue_type"];
   reserved 23 to 29;
 
   // ===== Assignment =====
