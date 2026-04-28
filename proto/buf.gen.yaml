@@ -1,0 +1,15 @@
+version: v2
+clean: true
+plugins:
+  # TypeScript / JavaScript via bufbuild/protobuf-es. Output goes into the UI
+  # source tree so vite/tsc pick it up without further config. This is the
+  # default codegen target — ships with the npm devDeps, no system tooling
+  # required.
+  - local: ../ui/node_modules/.bin/protoc-gen-es
+    out: ../ui/src/gen
+    opt:
+      - target=ts
+      - import_extension=js
+      - json_types=true
+inputs:
+  - directory: .

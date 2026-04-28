@@ -1,0 +1,14 @@
+version: v2
+clean: true
+plugins:
+  # Go via google.golang.org/protobuf/cmd/protoc-gen-go. Requires
+  # `go install google.golang.org/protobuf/cmd/protoc-gen-go@latest`. Run
+  # via `npm run proto:generate:go` from ui/ — kept separate from the
+  # default TS codegen so npm-only environments (e.g. CI without Go) stay
+  # functional.
+  - local: protoc-gen-go
+    out: gen/go
+    opt:
+      - paths=source_relative
+inputs:
+  - directory: .

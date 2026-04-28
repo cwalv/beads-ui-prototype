@@ -26,7 +26,7 @@ export default function ObserveGraph() {
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
 
   const visibleNodes = graph?.nodes.filter(n =>
-    !hiddenStatuses.has(n.bead.status) &&
+    !hiddenStatuses.has(n.bead.status as BeadStatus) &&
     (!n.bead.type || !hiddenTypes.has(n.bead.type))
   ) ?? [];
 
@@ -138,7 +138,7 @@ export default function ObserveGraph() {
           kind="bead"
           id={peekId}
           title={peekNode?.bead.title ?? peekId}
-          status={peekNode?.bead.status ?? 'open'}
+          status={(peekNode?.bead.status ?? 'open') as BeadStatus}
         >
           <IssuePeekBody beadId={peekId} onClose={close} onNodePatch={patchNode} />
         </PeekDrawer>

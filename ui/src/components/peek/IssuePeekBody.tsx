@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Bead, BeadDependency, BeadDependent, DepType } from '../../types';
+import type { Bead, DepType } from '../../types';
 import { getBead, updateBead, addComment, addDep, removeDep } from '../../client/bead';
 
 interface Props {
@@ -397,12 +397,12 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
               {(bead.dependencies ?? []).length === 0 && (
                 <div style={{ fontSize: 11, color: 'var(--mute)' }}>none</div>
               )}
-              {(bead.dependencies ?? []).map((dep: BeadDependency) => (
-                <div key={dep.depends_on_id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr auto', gap: 8, padding: '3px 0', alignItems: 'center', fontSize: 12 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--mute)' }}>{dep.type}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-2)' }}>{dep.depends_on_id}</span>
+              {(bead.dependencies ?? []).map(dep => (
+                <div key={dep.id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr auto', gap: 8, padding: '3px 0', alignItems: 'center', fontSize: 12 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--mute)' }}>{dep.dependency_type}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-2)' }}>{dep.id}</span>
                   <button
-                    onClick={() => handleRemoveDep(dep.depends_on_id)}
+                    onClick={() => handleRemoveDep(dep.id)}
                     style={{ fontSize: 10, padding: '1px 5px', border: '1px solid var(--rule)', borderRadius: 2, background: 'var(--bg)', color: 'var(--danger)', cursor: 'pointer' }}
                   >
                     ×
@@ -418,10 +418,10 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
               {(bead.dependents ?? []).length === 0 && (
                 <div style={{ fontSize: 11, color: 'var(--mute)' }}>none</div>
               )}
-              {(bead.dependents ?? []).map((dep: BeadDependent) => (
-                <div key={dep.issue_id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: 8, padding: '3px 0', alignItems: 'center', fontSize: 12 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--mute)' }}>{dep.type}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-2)' }}>{dep.issue_id}</span>
+              {(bead.dependents ?? []).map(dep => (
+                <div key={dep.id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: 8, padding: '3px 0', alignItems: 'center', fontSize: 12 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--mute)' }}>{dep.dependency_type}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-2)' }}>{dep.id}</span>
                 </div>
               ))}
             </div>
@@ -469,7 +469,7 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--ink-2)' }}>{c.author ?? 'anon'}</span>
                   {c.created_at && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--mute)' }}>{c.created_at}</span>}
                 </div>
-                <div style={{ fontSize: 12.5, color: 'var(--ink)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{c.body}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--ink)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{c.text}</div>
               </div>
             ))}
             <div style={{ borderTop: '1px solid var(--rule-2)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -498,11 +498,11 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch }: Props)
             {(bead.events ?? []).map(ev => (
               <div key={ev.id} style={{ borderBottom: '1px solid var(--rule-2)', paddingBottom: 6 }}>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 2 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent)', fontWeight: 600 }}>{ev.kind}</span>
-                  {ev.author && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-2)' }}>{ev.author}</span>}
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent)', fontWeight: 600 }}>{ev.event_type}</span>
+                  {ev.actor && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-2)' }}>{ev.actor}</span>}
                   {ev.created_at && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--mute)' }}>{ev.created_at}</span>}
                 </div>
-                {ev.message && <div style={{ fontSize: 12, color: 'var(--ink-3)', whiteSpace: 'pre-wrap' }}>{ev.message}</div>}
+                {ev.comment && <div style={{ fontSize: 12, color: 'var(--ink-3)', whiteSpace: 'pre-wrap' }}>{ev.comment}</div>}
               </div>
             ))}
           </div>

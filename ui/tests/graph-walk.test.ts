@@ -1,17 +1,32 @@
 import { describe, it, expect } from 'vitest';
 import { walkMoleculeGraph } from '../src/lib/graph-walk';
-import type { Bead } from '../src/types';
+import type { Bead, DepType } from '../src/types';
 
 function makeBead(id: string, overrides?: Partial<Bead>): Bead {
-  return { id, title: `Bead ${id}`, status: 'open', ...overrides };
+  return {
+    id,
+    title: `Bead ${id}`,
+    status: 'open',
+    priority: 2,
+    type: 'task',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
+// Edge fixture: one nested bead in dependencies/dependents arrays mirrors
+// `IssueWithDependencyMetadata` — full Bead + `dependency_type`.
+function depEdge(targetId: string, type: DepType): Bead {
+  return makeBead(targetId, { dependency_type: type });
 }
 
 describe('walkMoleculeGraph', () => {
   it('happy path: root with 2 deps returns 3 nodes and 2 edges', async () => {
     const beadA = makeBead('A', {
       dependencies: [
-        { depends_on_id: 'B', type: 'tracks' },
-        { depends_on_id: 'C', type: 'blocks' },
+        depEdge('B', 'tracks'),
+        depEdge('C', 'blocks'),
       ],
     });
     const beadB = makeBead('B');
@@ -34,8 +49,8 @@ describe('walkMoleculeGraph', () => {
   it('deduplication: same id referenced from multiple paths is only fetched once', async () => {
     let fetchCount = 0;
     const beadA = makeBead('A', {
-      dependencies: [{ depends_on_id: 'B', type: 'tracks' }],
-      dependents: [{ issue_id: 'B', type: 'related' }],
+      dependencies: [depEdge('B', 'tracks')],
+      dependents: [depEdge('B', 'related')],
     });
     const beadB = makeBead('B');
 
@@ -52,10 +67,10 @@ describe('walkMoleculeGraph', () => {
 
   it('depth cap: at maxDepth=1, stops before fetching second-hop nodes', async () => {
     const beadA = makeBead('A', {
-      dependencies: [{ depends_on_id: 'B', type: 'tracks' }],
+      dependencies: [depEdge('B', 'tracks')],
     });
     const beadB = makeBead('B', {
-      dependencies: [{ depends_on_id: 'C', type: 'tracks' }],
+      dependencies: [depEdge('C', 'tracks')],
     });
     const beadC = makeBead('C');
 
@@ -75,7 +90,7 @@ describe('walkMoleculeGraph', () => {
 
   it('ghost node: fetcher throws for one id → bead is null', async () => {
     const beadA = makeBead('A', {
-      dependencies: [{ depends_on_id: 'B', type: 'tracks' }],
+      dependencies: [depEdge('B', 'tracks')],
     });
 
     const fetcher = async (id: string) => {
@@ -90,10 +105,10 @@ describe('walkMoleculeGraph', () => {
 
   it('cycle guard: A depends on B, B depends on A → no infinite loop', async () => {
     const beadA = makeBead('A', {
-      dependencies: [{ depends_on_id: 'B', type: 'tracks' }],
+      dependencies: [depEdge('B', 'tracks')],
     });
     const beadB = makeBead('B', {
-      dependencies: [{ depends_on_id: 'A', type: 'tracks' }],
+      dependencies: [depEdge('A', 'tracks')],
     });
 
     const fetcher = async (id: string) => {

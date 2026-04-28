@@ -5,8 +5,8 @@ import { WorkspaceSwitcher } from '../src/components/switcher/WorkspaceSwitcher'
 import { WorkspaceContext } from '../src/hooks/useWorkspace';
 import type { WorkspaceState } from '../src/hooks/useWorkspace';
 
-const ws1 = { name: 'fo-beads-ui', path: '/tmp/fo', description: 'primary', color: '#2f6fe8' };
-const ws2 = { name: 'demo', path: '/tmp/demo', description: 'demo', color: '#2d7a4a' };
+const ws1 = { name: 'fo-beads-ui', path: '/tmp/fo', reachable: true, description: 'primary', color: '#2f6fe8' };
+const ws2 = { name: 'demo', path: '/tmp/demo', reachable: true, description: 'demo', color: '#2d7a4a' };
 
 function makeCtx(overrides?: Partial<WorkspaceState>): WorkspaceState {
   return {

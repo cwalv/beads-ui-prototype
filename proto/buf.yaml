@@ -1,0 +1,12 @@
+version: v2
+modules:
+  - path: .
+    name: buf.build/cwalv/beads
+lint:
+  use:
+    - STANDARD
+  except:
+    - PACKAGE_VERSION_SUFFIX
+breaking:
+  use:
+    - WIRE_JSON

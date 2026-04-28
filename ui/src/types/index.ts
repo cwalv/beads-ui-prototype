@@ -1,18 +1,95 @@
-export type Destination = 'author' | 'observe' | 'capture' | 'docs';
+// UI-facing type surface. Proto-defined messages re-exported under the
+// names the rest of the codebase already uses; UI-only types defined
+// inline below.
+//
+// The proto schema (`proto/beads/v1/`) is the canonical bd interface
+// contract. JSON wire types (`*Json`) match bd-server's snake_case wire
+// format directly via per-field `[json_name = ...]` annotations, so cast
+// from `fetch().json()` is sound without a translation layer.
+//
+// See projects/foundations/docs/beads-ui/architecture-decisions.md
+// (Decision 1) for the rationale.
 
-export interface Workspace {
+import type {
+  BeadJson,
+  CommentJson,
+  DependencyJson,
+  EventJson,
+  WorkspaceJson,
+} from '../gen/beads/v1/types_pb.js';
+import type {
+  FormulaEntryJson,
+  FormulaSchemaFieldJson,
+  FormulaSchemaJson,
+} from '../gen/beads/v1/formula_pb.js';
+
+// ===== Proto-backed types =====
+//
+// protojson treats every proto3 field as optional in JSON since absent
+// fields receive proto's default values on the wire. bd's actual
+// behavior populates a small set of fields on every row (id, title,
+// status, priority, type, created_at, updated_at). The aliases below
+// assert that contract for UI ergonomics; runtime parsing should still
+// guard against malformed responses.
+
+export type Bead = Omit<
+  BeadJson,
+  | 'id'
+  | 'title'
+  | 'status'
+  | 'priority'
+  | 'type'
+  | 'created_at'
+  | 'updated_at'
+  | 'dependencies'
+  | 'dependents'
+  | 'comments'
+> & {
+  id: string;
+  title: string;
+  status: string;
+  priority: number;
+  type: string;
+  created_at: NonNullable<BeadJson['created_at']>;
+  updated_at: NonNullable<BeadJson['updated_at']>;
+  // bd show populates dependencies / dependents as full nested beads
+  // tagged with `dependency_type`. Comments are full Comment rows.
+  dependencies?: Bead[];
+  dependents?: Bead[];
+  comments?: Comment[];
+  // UI-side extension: proto Bead does not include event-table rows in v1
+  // (bd-server's `bd show --json` does not populate them). The field is
+  // kept here so the events tab can render once a future bd-server
+  // surface attaches them. Always `undefined` against the current wire.
+  events?: Event[];
+};
+
+export type Comment = Omit<CommentJson, 'id' | 'issue_id' | 'author' | 'text' | 'created_at'> & {
+  id: string;
+  issue_id: string;
+  author: string;
+  text: string;
+  created_at: NonNullable<CommentJson['created_at']>;
+};
+
+export type Dependency = DependencyJson;
+export type Event = EventJson;
+export type Workspace = Omit<WorkspaceJson, 'name' | 'path' | 'reachable'> & {
   name: string;
   path: string;
-  description?: string;
-  color?: string;
-}
+  reachable: boolean;
+};
+export type FormulaSchema = FormulaSchemaJson;
+export type FormulaSchemaField = FormulaSchemaFieldJson;
+export type FormulaEntry = FormulaEntryJson;
+
+// ===== UI / transport-only types =====
+
+export type Destination = 'author' | 'observe' | 'capture' | 'docs';
 
 export interface WorkspacesResponse {
   workspaces: Workspace[];
 }
-
-export type BeadStatus = 'open' | 'in_progress' | 'blocked' | 'deferred' | 'closed';
-export type BeadType = 'bug' | 'feature' | 'task' | 'epic' | 'chore' | 'message' | 'merge-request' | 'molecule' | 'gate' | 'agent' | 'role' | 'convoy';
 
 export interface BdError {
   kind: 'network' | 'server' | 'parse';
@@ -26,34 +103,72 @@ export interface BdResponse<T = unknown> {
   error?: BdError;
 }
 
-export type DepType = 'tracks' | 'blocks' | 'parent-child' | 'waits-for' | 'conditional-blocks' | 'related' | 'discovered-from';
+// ===== Canonical value tables (string narrowings) =====
+//
+// The proto exposes status / type / dep_type as bare `string` because bd
+// supports user-defined customs. UI components that switch on known values
+// narrow to these unions; unknown values pass through with neutral render.
 
-export interface BeadDependency { depends_on_id: string; type: DepType; }
-export interface BeadDependent { issue_id: string; type: DepType; }
-export interface BeadComment { id: string; body: string; author?: string; created_at?: string; }
-export interface BeadEvent { id: string; kind: string; message?: string; author?: string; created_at?: string; }
+export type BeadStatus =
+  | 'open'
+  | 'in_progress'
+  | 'blocked'
+  | 'deferred'
+  | 'closed'
+  | 'pinned'
+  | 'hooked';
 
-export interface Bead {
-  id: string;
-  title: string;
-  description?: string;
-  design?: string;
-  acceptance_criteria?: string;
-  notes?: string;
-  status: BeadStatus;
-  type?: BeadType;
-  priority?: number;
-  assignee?: string;
-  labels?: string[];
-  external_ref?: string;
-  metadata?: Record<string, unknown>;
-  dependencies?: BeadDependency[];
-  dependents?: BeadDependent[];
-  comments?: BeadComment[];
-  events?: BeadEvent[];
-  created_at?: string;
-  updated_at?: string;
-}
+export type BeadType =
+  | 'bug'
+  | 'feature'
+  | 'task'
+  | 'epic'
+  | 'chore'
+  | 'decision'
+  | 'message'
+  | 'molecule'
+  | 'spike'
+  | 'story'
+  | 'milestone'
+  | 'event'
+  // Removed-from-built-in but commonly seen as customs:
+  | 'gate'
+  | 'convoy'
+  | 'merge-request'
+  | 'slot'
+  | 'agent'
+  | 'role'
+  | 'rig';
+
+export type DepType =
+  // Workflow (affect ready-work calc)
+  | 'blocks'
+  | 'parent-child'
+  | 'conditional-blocks'
+  | 'waits-for'
+  // Association
+  | 'related'
+  | 'discovered-from'
+  // Graph link
+  | 'replies-to'
+  | 'relates-to'
+  | 'duplicates'
+  | 'supersedes'
+  // Entity
+  | 'authored-by'
+  | 'assigned-to'
+  | 'approved-by'
+  | 'attests'
+  // Convoy / cross-project
+  | 'tracks'
+  // Reference
+  | 'until'
+  | 'caused-by'
+  | 'validates'
+  // Delegation
+  | 'delegated-from';
+
+// ===== Layout types (UI-side molecule graph rendering) =====
 
 export interface LayoutNode {
   id: string;

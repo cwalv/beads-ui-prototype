@@ -15,6 +15,8 @@ const STATUS_ICON: Record<BeadStatus, string> = {
   blocked: '●',
   deferred: '❄',
   closed: '✓',
+  pinned: '⚲',
+  hooked: '⚓',
 };
 
 const STATUS_CLASS: Record<BeadStatus, string> = {
@@ -23,6 +25,8 @@ const STATUS_CLASS: Record<BeadStatus, string> = {
   blocked: 'st-blocked',
   deferred: 'st-deferred',
   closed: 'st-closed',
+  pinned: 'st-pinned',
+  hooked: 'st-hooked',
 };
 
 export function PeekDrawer({ kind = 'bead', id = '', title = '', status = 'open', children }: Props) {

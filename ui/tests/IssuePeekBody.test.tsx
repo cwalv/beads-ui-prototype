@@ -13,17 +13,33 @@ vi.mock('../src/client/bead', () => ({
 
 import { getBead } from '../src/client/bead';
 
+function makeNestedBead(id: string, depType: string): Bead {
+  return {
+    id,
+    title: `Bead ${id}`,
+    status: 'open',
+    priority: 2,
+    type: 'task',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    dependency_type: depType,
+  };
+}
+
 const mockBead: Bead = {
   id: 'fo-test-1',
   title: 'Test Bead',
   description: 'A test description',
   status: 'open',
   priority: 2,
+  type: 'task',
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
   assignee: 'alice',
-  dependencies: [{ depends_on_id: 'fo-dep-1', type: 'tracks' }],
-  dependents: [{ issue_id: 'fo-child-1', type: 'blocks' }],
-  comments: [{ id: 'c1', body: 'Hello world', author: 'bob', created_at: '2026-01-01' }],
-  events: [{ id: 'e1', kind: 'status_changed', message: 'opened', author: 'alice', created_at: '2026-01-01' }],
+  dependencies: [makeNestedBead('fo-dep-1', 'tracks')],
+  dependents: [makeNestedBead('fo-child-1', 'blocks')],
+  comments: [{ id: 'c1', issue_id: 'fo-test-1', text: 'Hello world', author: 'bob', created_at: '2026-01-01T00:00:00Z' }],
+  events: [{ id: 'e1', issue_id: 'fo-test-1', event_type: 'status_changed', actor: 'alice', comment: 'opened', created_at: '2026-01-01T00:00:00Z' }],
 };
 
 beforeEach(() => {

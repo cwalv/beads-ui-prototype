@@ -20,8 +20,8 @@ const footerApi: FooterAPI = { content: { left: '', right: '' }, setContent: vi.
 
 function makeWorkspaceCtx(overrides: Partial<WorkspaceState> = {}): WorkspaceState {
   return {
-    workspaces: [{ name: 'foundations', path: '/tmp/.beads' }],
-    current: { name: 'foundations', path: '/tmp/.beads' },
+    workspaces: [{ name: 'foundations', path: '/tmp/.beads', reachable: true }],
+    current: { name: 'foundations', path: '/tmp/.beads', reachable: true },
     loading: false,
     error: null,
     isStub: true,

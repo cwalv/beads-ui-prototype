@@ -1,0 +1,55 @@
+// beads.v1 — formula schema and listing types.
+//
+// Formulas are workflow templates authored in TOML. The schema describes
+// permitted fields per scope (top-level / step / var). The listing surface
+// enumerates discoverable formula files per configured directory.
+
+syntax = "proto3";
+
+package beads.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/cwalv/beads-ui-prototype/proto/gen/go/beads/v1;beadsv1";
+
+// FormulaSchemaField describes one permitted field at some scope of a
+// formula TOML file. Mirrors bd-server's hand-curated schema (the
+// canonical version in bd is still future work — see Decision 1).
+message FormulaSchemaField {
+  string key = 1;
+  // Canonical type values: "string" | "string[]" | "int" | "bool" |
+  // "enum" | "table". Treat unknowns as opaque text.
+  string type = 2;
+  bool required = 3;
+  string description = 4;
+  // Suggested values when type == "enum".
+  repeated string enum = 5;
+  // If true, values outside `enum` are an error rather than a hint.
+  bool enum_strict = 6;
+  string example = 7;
+  reserved 8 to 19;
+}
+
+// FormulaSchema groups schema fields by scope.
+message FormulaSchema {
+  // Schema revision string (e.g. "0.1").
+  string version = 1;
+  // Top-level fields (formula, description, kind, extends, contract).
+  repeated FormulaSchemaField top_level = 2;
+  // Per-step fields (id, title, needs, max_attempts, on_exhausted, …).
+  repeated FormulaSchemaField step = 3;
+  // Per-variable fields (name, default, required).
+  repeated FormulaSchemaField var = 4;
+  reserved 5 to 19;
+}
+
+// FormulaEntry is one discoverable formula file in a configured dir.
+message FormulaEntry {
+  // The filename stem (e.g. "mol-do-work" for "mol-do-work.formula.toml").
+  string name = 1;
+  // Absolute or workspace-relative path to the .formula.toml file.
+  string path = 2;
+  int64 size = 3;
+  google.protobuf.Timestamp mtime = 4;
+  reserved 5 to 19;
+}

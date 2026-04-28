@@ -62,6 +62,10 @@ export function layoutGraph(beads: Map<string, Bead | null>, rawEdges: RawEdge[]
         id,
         title: id,
         status: 'open',
+        priority: 2,
+        type: 'task',
+        created_at: '',
+        updated_at: '',
       };
       const actualBead = bead ?? ghostBead;
 

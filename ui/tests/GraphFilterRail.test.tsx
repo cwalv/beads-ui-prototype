@@ -3,10 +3,18 @@ import { describe, it, expect, vi } from 'vitest';
 import { GraphFilterRail } from '../src/components/observe/GraphFilterRail';
 import type { LayoutNode, Bead } from '../src/types';
 
-function makeNode(id: string, status: Bead['status'], type?: Bead['type']): LayoutNode {
+function makeNode(id: string, status: Bead['status'], type: Bead['type'] = 'task'): LayoutNode {
   return {
     id,
-    bead: { id, title: `Bead ${id}`, status, type },
+    bead: {
+      id,
+      title: `Bead ${id}`,
+      status,
+      type,
+      priority: 2,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    },
     x: 0, y: 0, w: 220, h: 80,
   };
 }
