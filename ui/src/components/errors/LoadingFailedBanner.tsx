@@ -1,5 +1,5 @@
 interface Props {
-  kind: 'workspaces' | 'molecule-graph' | 'fleet' | 'formula-source' | 'formula-list';
+  kind: 'workspaces' | 'molecule-graph' | 'fleet' | 'formula-source' | 'formula-list' | 'queue';
   onRetry?: () => void;
   moleculeId?: string;
   formulaName?: string;
@@ -10,6 +10,7 @@ const MESSAGES: Record<Props['kind'], string | ((props: Props) => string)> = {
   'molecule-graph': (p: Props) =>
     `Could not load molecule graph${p.moleculeId ? ` for "${p.moleculeId}"` : ''} — bd-server may be unavailable.`,
   fleet: 'Could not load live molecules — bd-server may be unavailable.',
+  queue: 'Could not load the work queue — bd-server may be unavailable.',
   'formula-source': (p: Props) =>
     `Could not load formula${p.formulaName ? ` "${p.formulaName}"` : ''} — bd-server may be unavailable.`,
   'formula-list': 'Could not load formula catalog — bd-server may be unavailable.',
