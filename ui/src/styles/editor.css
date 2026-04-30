@@ -273,6 +273,11 @@
 }
 .ed-src-hl.range { background: rgba(47,111,232,0.07); }
 .ed-src-hl.err { background: rgba(178,58,58,0.08); }
+@keyframes src-step-flash {
+  from { background: rgba(47,111,232,0.35); }
+  to   { background: transparent; }
+}
+.ed-src-hl.flash { animation: src-step-flash 500ms ease-out forwards; }
 .ed-src-textarea {
   position: absolute; top: 0; left: 42px; right: 0; bottom: 0;
   border: none; outline: none; padding: 0 14px;

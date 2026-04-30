@@ -58,8 +58,13 @@ export default function AuthorEdit() {
     saveState, saveError, dirty, save, reload, forceOverwrite,
   } = useFormulaSource(dir, name, wsName);
 
-  // TODO fo-zz4pz §9: DAG-to-source scroll polish — clicking a DAG node should scroll + highlight the matched [[steps]] block; current `selected` wiring is partial
   const [selected, setSelected] = useState<string | null>(null);
+  const [dagScrollTo, setDagScrollTo] = useState<{ id: string; n: number } | null>(null);
+
+  const onDagSelect = useCallback((id: string) => {
+    setSelected(id);
+    setDagScrollTo(prev => ({ id, n: (prev?.n ?? 0) + 1 }));
+  }, []);
   const [splitPx, setSplitPx] = useState(DEFAULT_SPLIT_PX);
   const [splitInitialized, setSplitInitialized] = useState(false);
   const [errorScrollTo, setErrorScrollTo] = useState<{ line: number; n: number } | null>(null);
@@ -244,6 +249,7 @@ export default function AuthorEdit() {
                 stepRanges={parsed.stepRanges}
                 errors={parsed.errors}
                 scrollTo={errorScrollTo}
+                dagScrollTo={dagScrollTo}
                 conflictBanner={saveState === 'conflict' ? (
                   <ConflictBanner onReload={reload} onForceOverwrite={forceOverwrite} />
                 ) : undefined}
@@ -274,7 +280,7 @@ export default function AuthorEdit() {
                   steps={parsed.steps}
                   layout={layout}
                   selected={selected}
-                  onSelect={setSelected}
+                  onSelect={onDagSelect}
                   errors={parsed.errors}
                 />
               </div>
