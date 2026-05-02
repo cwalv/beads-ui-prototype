@@ -298,6 +298,7 @@ export default function AuthorEdit() {
               schema={schema}
               schemaError={schemaError}
               formulaName={formulaName}
+              selected={selected}
               onJumpToSource={onJumpToSource}
             />
           )}

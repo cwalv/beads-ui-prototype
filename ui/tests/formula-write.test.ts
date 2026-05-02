@@ -10,6 +10,12 @@ import {
   removeVar,
   extractDescription,
   formatTomlValue,
+  extractStepDescription,
+  writeStepField,
+  renameStepId,
+  addStep,
+  removeStep,
+  moveStep,
 } from '../src/lib/formula-write';
 import { parseFormula } from '../src/lib/formula-parse';
 
@@ -204,5 +210,271 @@ describe('removeVar', () => {
   it('returns source unchanged when var not found', () => {
     const result = removeVar(fixture, 'nonexistent');
     expect(result).toBe(fixture);
+  });
+});
+
+// ── Step helper tests ──
+
+const STEP_SRC = `formula = "test"
+version = 1
+
+[[steps]]
+id = "fetch"
+title = "Fetch things"
+description = """
+Multi-line
+description here.
+"""
+needs = []
+
+[[steps]]
+id = "process"
+title = "Process output"
+needs = ["fetch"]
+
+[steps.retry]
+max_attempts = 3
+on_exhausted = "hard_fail"
+
+[[steps]]
+id = "publish"
+title = "Publish results"
+needs = ["fetch", "process"]
+metadata = { "gc.routed_to" = "pool" }
+`;
+
+describe('extractStepDescription', () => {
+  it('extracts triple-quoted multi-line description', () => {
+    const desc = extractStepDescription(STEP_SRC, 0);
+    expect(desc).toContain('Multi-line');
+    expect(desc).toContain('description here.');
+  });
+
+  it('returns empty string when step has no description', () => {
+    expect(extractStepDescription(STEP_SRC, 1)).toBe('');
+  });
+
+  it('returns empty string for out-of-bounds index', () => {
+    expect(extractStepDescription(STEP_SRC, 99)).toBe('');
+  });
+});
+
+describe('writeStepField — simple fields', () => {
+  it('updates title of a step', () => {
+    const result = writeStepField(STEP_SRC, 0, 'title', 'New title');
+    const { steps } = parseFormula(result);
+    expect(steps[0].title).toBe('New title');
+    expect(steps[1].title).toBe('Process output');
+  });
+
+  it('inserts title when not present', () => {
+    const src = `formula = "t"\n\n[[steps]]\nid = "a"\n`;
+    const result = writeStepField(src, 0, 'title', 'Added title');
+    const { steps } = parseFormula(result);
+    expect(steps[0].title).toBe('Added title');
+  });
+
+  it('does not mutate other steps', () => {
+    const result = writeStepField(STEP_SRC, 1, 'title', 'Changed');
+    const { steps } = parseFormula(result);
+    expect(steps[0].title).toBe('Fetch things');
+    expect(steps[2].title).toBe('Publish results');
+  });
+});
+
+describe('writeStepField — description', () => {
+  it('replaces existing multi-line description', () => {
+    const result = writeStepField(STEP_SRC, 0, 'description', 'Short new');
+    expect(extractStepDescription(result, 0)).toBe('Short new');
+  });
+
+  it('writes triple-quoted for multi-line description', () => {
+    const result = writeStepField(STEP_SRC, 0, 'description', 'Line 1\nLine 2');
+    expect(result).toContain('description = """');
+    expect(extractStepDescription(result, 0)).toBe('Line 1\nLine 2');
+  });
+
+  it('inserts description when not present', () => {
+    const result = writeStepField(STEP_SRC, 1, 'description', 'Added');
+    expect(extractStepDescription(result, 1)).toBe('Added');
+  });
+
+  it('does not affect other steps', () => {
+    const result = writeStepField(STEP_SRC, 1, 'description', 'For step 2');
+    const { steps } = parseFormula(result);
+    expect(steps[0].id).toBe('fetch');
+    expect(steps[2].id).toBe('publish');
+  });
+});
+
+describe('writeStepField — needs', () => {
+  it('updates needs array', () => {
+    const result = writeStepField(STEP_SRC, 2, 'needs', ['fetch']);
+    const { steps } = parseFormula(result);
+    expect(steps[2].needs).toEqual(['fetch']);
+  });
+
+  it('clears needs array', () => {
+    const result = writeStepField(STEP_SRC, 1, 'needs', []);
+    const { steps } = parseFormula(result);
+    expect(steps[1].needs).toEqual([]);
+  });
+
+  it('inserts needs when not present', () => {
+    const src = `formula = "t"\n\n[[steps]]\nid = "a"\n`;
+    const result = writeStepField(src, 0, 'needs', ['b']);
+    const { steps } = parseFormula(result);
+    expect(steps[0].needs).toEqual(['b']);
+  });
+});
+
+describe('writeStepField — retry fields', () => {
+  it('updates max_attempts in existing retry section', () => {
+    const result = writeStepField(STEP_SRC, 1, 'max_attempts', 5);
+    const { steps } = parseFormula(result);
+    expect(steps[1].retry?.max_attempts).toBe(5);
+  });
+
+  it('updates on_exhausted in existing retry section', () => {
+    const result = writeStepField(STEP_SRC, 1, 'on_exhausted', 'soft_fail');
+    const { steps } = parseFormula(result);
+    expect(steps[1].retry?.on_exhausted).toBe('soft_fail');
+  });
+
+  it('creates [steps.retry] section when absent', () => {
+    const result = writeStepField(STEP_SRC, 0, 'max_attempts', 2);
+    const { steps } = parseFormula(result);
+    expect(steps[0].retry?.max_attempts).toBe(2);
+  });
+
+  it('does not affect retry on other steps', () => {
+    const result = writeStepField(STEP_SRC, 0, 'max_attempts', 2);
+    const { steps } = parseFormula(result);
+    expect(steps[1].retry?.max_attempts).toBe(3);
+  });
+});
+
+describe('renameStepId', () => {
+  it('renames the id field', () => {
+    const result = renameStepId(STEP_SRC, 'fetch', 'fetch-data');
+    const { steps } = parseFormula(result);
+    expect(steps[0].id).toBe('fetch-data');
+  });
+
+  it('rewrites all needs references', () => {
+    const result = renameStepId(STEP_SRC, 'fetch', 'fetch-data');
+    const { steps } = parseFormula(result);
+    expect(steps[1].needs).toContain('fetch-data');
+    expect(steps[1].needs).not.toContain('fetch');
+    expect(steps[2].needs).toContain('fetch-data');
+    expect(steps[2].needs).not.toContain('fetch');
+  });
+
+  it('returns source unchanged when id not found', () => {
+    const result = renameStepId(STEP_SRC, 'nonexistent', 'new-id');
+    expect(result).toBe(STEP_SRC);
+  });
+
+  it('returns source unchanged when old === new', () => {
+    const result = renameStepId(STEP_SRC, 'fetch', 'fetch');
+    expect(result).toBe(STEP_SRC);
+  });
+
+  it('preserves all other steps and vars', () => {
+    const result = renameStepId(STEP_SRC, 'process', 'transform');
+    const { steps } = parseFormula(result);
+    expect(steps.length).toBe(3);
+    expect(steps[0].id).toBe('fetch');
+    expect(steps[1].id).toBe('transform');
+    expect(steps[2].needs).toContain('transform');
+  });
+});
+
+describe('addStep', () => {
+  it('appends a new step at end by default', () => {
+    const result = addStep(STEP_SRC, { id: 'notify' });
+    const { steps } = parseFormula(result);
+    expect(steps.length).toBe(4);
+    expect(steps[3].id).toBe('notify');
+  });
+
+  it('inserts step after given index', () => {
+    const result = addStep(STEP_SRC, { id: 'validate', afterIndex: 0 });
+    const { steps } = parseFormula(result);
+    expect(steps.length).toBe(4);
+    expect(steps[1].id).toBe('validate');
+  });
+
+  it('includes title when provided', () => {
+    const result = addStep(STEP_SRC, { id: 'notify', title: 'Send notification' });
+    const { steps } = parseFormula(result);
+    expect(steps[3].title).toBe('Send notification');
+  });
+
+  it('preserves existing steps', () => {
+    const result = addStep(STEP_SRC, { id: 'extra' });
+    const { steps } = parseFormula(result);
+    expect(steps[0].id).toBe('fetch');
+    expect(steps[1].id).toBe('process');
+    expect(steps[2].id).toBe('publish');
+  });
+});
+
+describe('removeStep', () => {
+  it('removes the step block', () => {
+    const result = removeStep(STEP_SRC, 1);
+    const { steps } = parseFormula(result);
+    expect(steps.length).toBe(2);
+    expect(steps.find(s => s.id === 'process')).toBeUndefined();
+  });
+
+  it('scrubs removed id from other needs', () => {
+    const result = removeStep(STEP_SRC, 1);
+    const { steps } = parseFormula(result);
+    const publish = steps.find(s => s.id === 'publish');
+    expect(publish?.needs).not.toContain('process');
+  });
+
+  it('preserves steps not involved in the removal', () => {
+    const result = removeStep(STEP_SRC, 1);
+    const { steps } = parseFormula(result);
+    expect(steps[0].id).toBe('fetch');
+    expect(steps[1].id).toBe('publish');
+  });
+
+  it('returns source unchanged for out-of-bounds index', () => {
+    const result = removeStep(STEP_SRC, 99);
+    expect(result).toBe(STEP_SRC);
+  });
+});
+
+describe('moveStep', () => {
+  it('moves a step forward', () => {
+    const result = moveStep(STEP_SRC, 0, 2);
+    const { steps } = parseFormula(result);
+    expect(steps[0].id).toBe('process');
+    expect(steps[1].id).toBe('publish');
+    expect(steps[2].id).toBe('fetch');
+  });
+
+  it('moves a step backward', () => {
+    const result = moveStep(STEP_SRC, 2, 0);
+    const { steps } = parseFormula(result);
+    expect(steps[0].id).toBe('publish');
+    expect(steps[1].id).toBe('fetch');
+    expect(steps[2].id).toBe('process');
+  });
+
+  it('returns source unchanged when from === to', () => {
+    const result = moveStep(STEP_SRC, 1, 1);
+    expect(result).toBe(STEP_SRC);
+  });
+
+  it('preserves all step ids after move', () => {
+    const result = moveStep(STEP_SRC, 0, 1);
+    const { steps } = parseFormula(result);
+    expect(steps.map(s => s.id)).toContain('fetch');
+    expect(steps.map(s => s.id)).toContain('process');
+    expect(steps.map(s => s.id)).toContain('publish');
   });
 });
