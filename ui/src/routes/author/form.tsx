@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState, useRef } from 'react';
 import type { FormulaSchema } from '../../client/schema';
 import { HintDot } from '../../components/ui/HintDot';
 import { getConcept } from '../../data/concepts';
@@ -10,8 +10,15 @@ import {
   addVar,
   removeVar,
   extractDescription,
+  writeStepField,
+  renameStepId,
+  addStep,
+  removeStep,
+  moveStep,
+  extractStepDescription,
 } from '../../lib/formula-write';
 import { ChipList } from '../../components/editor/form/ChipList';
+import { StepCard } from '../../components/editor/form/StepCard';
 
 interface Props {
   src: string;
@@ -20,11 +27,70 @@ interface Props {
   schema: FormulaSchema | null;
   schemaError: string | null;
   formulaName: string;
+  selected?: string | null;
   onJumpToSource: (stepId: string | null, line?: number) => void;
 }
 
-export function FormView({ src, setSrc, parsed, schema, schemaError, formulaName, onJumpToSource }: Props) {
+export function FormView({ src, setSrc, parsed, schema, schemaError, formulaName, selected, onJumpToSource }: Props) {
   const description = useMemo(() => extractDescription(src), [src]);
+
+  // Expanded state per step: step id → boolean. Seed from `selected`.
+  const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>(() => {
+    if (!selected) return {};
+    return { [selected]: true };
+  });
+  // Keep expanded open when `selected` changes externally
+  const prevSelected = useRef(selected);
+  if (selected && selected !== prevSelected.current) {
+    prevSelected.current = selected;
+    if (!expandedSteps[selected]) setExpandedSteps(prev => ({ ...prev, [selected]: true }));
+  }
+
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+
+  const stepDescriptions = useMemo(
+    () => parsed.steps.map((_, i) => extractStepDescription(src, i)),
+    [src, parsed.steps],
+  );
+
+  const allStepIds = useMemo(
+    () => parsed.steps.map(s => s.id).filter((id): id is string => !!id),
+    [parsed.steps],
+  );
+
+  const onStepFieldChange = useCallback((stepIndex: number, field: string, value: unknown) => {
+    if (field === 'id') {
+      const oldId = parsed.steps[stepIndex]?.id ?? '';
+      setSrc(renameStepId(src, oldId, String(value)));
+      // Update expanded key if renaming
+      if (oldId && oldId !== String(value)) {
+        setExpandedSteps(prev => {
+          const next = { ...prev };
+          if (next[oldId]) { next[String(value)] = true; delete next[oldId]; }
+          return next;
+        });
+      }
+    } else {
+      setSrc(writeStepField(src, stepIndex, field, value));
+    }
+  }, [src, setSrc, parsed.steps]);
+
+  const onAddStep = useCallback(() => {
+    const id = `step-${Date.now().toString(36)}`;
+    setSrc(addStep(src, { id }));
+    setExpandedSteps(prev => ({ ...prev, [id]: true }));
+  }, [src, setSrc]);
+
+  const onDeleteStep = useCallback((stepIndex: number) => {
+    const id = parsed.steps[stepIndex]?.id;
+    setSrc(removeStep(src, stepIndex));
+    if (id) setExpandedSteps(prev => { const next = { ...prev }; delete next[id]; return next; });
+  }, [src, setSrc, parsed.steps]);
+
+  const onMoveStep = useCallback((from: number, to: number) => {
+    setSrc(moveStep(src, from, to));
+  }, [src, setSrc]);
 
   const topLevelFields = schema?.topLevel ?? [];
   const schemaField = (key: string) => topLevelFields.find(f => f.key === key) ?? null;
@@ -231,41 +297,43 @@ export function FormView({ src, setSrc, parsed, schema, schemaError, formulaName
       <section className="fm-section">
         <div className="fm-section-head">
           <span className="fm-section-label">Steps</span>
-          <span className="fm-section-meta">{parsed.steps.length} steps · read-only</span>
+          <span className="fm-section-meta">{parsed.steps.length} step{parsed.steps.length !== 1 ? 's' : ''}</span>
         </div>
-        <div className="fm-section-body fm-steps-body">
+        <div className="fm-steps-body">
           {parsed.steps.length === 0 && (
-            <div className="fm-empty">No steps defined</div>
+            <div className="fm-empty" style={{ padding: '10px 14px' }}>No steps defined</div>
           )}
           {parsed.steps.map((step, idx) => {
-            const range = parsed.stepRanges[idx];
+            const key = step.id ?? String(idx);
+            const isExpanded = !!(expandedSteps[step.id ?? ''] ?? expandedSteps[String(idx)]);
             return (
-              <div
-                key={step.id ?? idx}
-                className="fm-step-row"
-                role="button"
-                tabIndex={0}
-                onClick={() => onJumpToSource(step.id, range?.startLine)}
-                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onJumpToSource(step.id, range?.startLine); }}
-                title="Click to jump to source"
-              >
-                <span className="fm-step-idx">{idx + 1}</span>
-                <div className="fm-step-body">
-                  <span className="fm-step-id">{step.id ?? '(no id)'}</span>
-                  {step.title && <span className="fm-step-title">{step.title}</span>}
-                </div>
-                <div className="fm-step-badges">
-                  {step.needs.length > 0 && (
-                    <span className="fm-badge">{step.needs.length} dep{step.needs.length > 1 ? 's' : ''}</span>
-                  )}
-                  {step.retry && (
-                    <span className="fm-badge">retry ×{step.retry.max_attempts ?? '?'}</span>
-                  )}
-                </div>
-                <span className="fm-step-goto">→ source</span>
-              </div>
+              <StepCard
+                key={key}
+                step={step}
+                index={idx}
+                description={stepDescriptions[idx] ?? ''}
+                expanded={isExpanded}
+                allStepIds={allStepIds}
+                onToggle={() => {
+                  const k = step.id ?? String(idx);
+                  setExpandedSteps(prev => ({ ...prev, [k]: !prev[k] }));
+                }}
+                onFieldChange={(field, value) => onStepFieldChange(idx, field, value)}
+                onDelete={() => onDeleteStep(idx)}
+                onJumpToSource={() => onJumpToSource(step.id, parsed.stepRanges[idx]?.startLine)}
+                onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; setDragFrom(idx); }}
+                onDragOver={e => { e.preventDefault(); setDragOver(idx); }}
+                onDrop={e => {
+                  e.preventDefault();
+                  if (dragFrom !== null && dragFrom !== idx) onMoveStep(dragFrom, idx);
+                  setDragFrom(null); setDragOver(null);
+                }}
+                onDragEnd={() => { setDragFrom(null); setDragOver(null); }}
+                isDragOver={dragOver === idx}
+              />
             );
           })}
+          <button className="fm-add-step" onClick={onAddStep}>+ add step</button>
         </div>
       </section>
     </div>
