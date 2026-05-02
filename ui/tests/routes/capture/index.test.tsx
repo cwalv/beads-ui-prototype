@@ -19,8 +19,8 @@ const footerApi: FooterAPI = { content: { left: '', right: '' }, setContent: vi.
 
 function makeWorkspaceCtx(overrides: Partial<WorkspaceState> = {}): WorkspaceState {
   return {
-    workspaces: [{ name: 'fo-beads-ui', path: '/tmp/.beads', color: '#2f6fe8' }],
-    current: { name: 'fo-beads-ui', path: '/tmp/.beads', color: '#2f6fe8' },
+    workspaces: [{ name: 'fo-beads-ui', path: '/tmp/.beads', reachable: true, color: '#2f6fe8' }],
+    current: { name: 'fo-beads-ui', path: '/tmp/.beads', reachable: true, color: '#2f6fe8' },
     loading: false,
     error: null,
     isStub: true,

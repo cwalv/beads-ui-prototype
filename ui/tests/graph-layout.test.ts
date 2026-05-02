@@ -4,7 +4,16 @@ import type { Bead } from '../src/types';
 import type { RawEdge } from '../src/lib/graph-walk';
 
 function makeBead(id: string, overrides?: Partial<Bead>): Bead {
-  return { id, title: `Bead ${id}`, status: 'open', ...overrides };
+  return {
+    id,
+    title: `Bead ${id}`,
+    status: 'open',
+    priority: 2,
+    type: 'task',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  };
 }
 
 describe('layoutGraph', () => {

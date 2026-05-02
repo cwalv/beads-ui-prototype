@@ -36,13 +36,15 @@ export async function walkMoleculeGraph(
     for (const id of frontier) {
       const bead = beads.get(id);
       if (!bead) continue;
+      // bd show populates dependencies / dependents as full nested beads
+      // tagged with `dependency_type` (the edge kind connecting to `id`).
       for (const dep of bead.dependencies ?? []) {
-        addEdge(dep.depends_on_id, id, dep.type);
-        if (!beads.has(dep.depends_on_id)) nextFrontier.add(dep.depends_on_id);
+        addEdge(dep.id, id, (dep.dependency_type ?? 'related') as DepType);
+        if (!beads.has(dep.id)) nextFrontier.add(dep.id);
       }
       for (const dep of bead.dependents ?? []) {
-        addEdge(id, dep.issue_id, dep.type);
-        if (!beads.has(dep.issue_id)) nextFrontier.add(dep.issue_id);
+        addEdge(id, dep.id, (dep.dependency_type ?? 'related') as DepType);
+        if (!beads.has(dep.id)) nextFrontier.add(dep.id);
       }
     }
     frontier = [...nextFrontier];

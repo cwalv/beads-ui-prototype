@@ -6,6 +6,10 @@ function makeBead(overrides: Partial<Bead> & { id: string }): Bead {
   return {
     title: overrides.id,
     status: 'open',
+    priority: 2,
+    type: 'task',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
     ...overrides,
   };
 }

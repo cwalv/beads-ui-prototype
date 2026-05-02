@@ -39,7 +39,9 @@ export async function updateBead(id: string, patch: {
   title?: string; description?: string; design?: string;
   notes?: string; acceptance?: string; status?: string;
   priority?: number; assignee?: string; unassign?: boolean;
-  addLabel?: string; removeLabel?: string; externalRef?: string;
+  addLabel?: string; removeLabel?: string;
+  addLabels?: string[]; removeLabels?: string[];
+  externalRef?: string;
 }): Promise<void> {
   const args = ['update', id];
   if (patch.title !== undefined) { args.push('--title'); args.push(patch.title); }
@@ -53,6 +55,8 @@ export async function updateBead(id: string, patch: {
   if (patch.unassign) args.push('--unassignee');
   if (patch.addLabel !== undefined) { args.push('--add-label'); args.push(patch.addLabel); }
   if (patch.removeLabel !== undefined) { args.push('--remove-label'); args.push(patch.removeLabel); }
+  for (const l of patch.addLabels ?? []) { args.push('--add-label'); args.push(l); }
+  for (const l of patch.removeLabels ?? []) { args.push('--remove-label'); args.push(l); }
   if (patch.externalRef !== undefined) args.push(`--external-ref=${patch.externalRef}`);
   await bdClient.fetch<unknown>(args);
 }

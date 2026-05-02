@@ -19,6 +19,8 @@ interface Props {
   // The `n` (nonce) field forces the effect to re-fire even when the same
   // line is requested twice in a row.
   scrollTo?: { line: number; n: number } | null;
+  // DAG-node click: scroll + flash the matched [[steps]] block.
+  dagScrollTo?: { id: string; n: number } | null;
 }
 
 const BASE_FONT_SIZE = 12;
@@ -141,7 +143,7 @@ interface PopoverState {
 }
 
 export function SourcePane({
-  src, setSrc, highlighted, srcLines, selected, stepRanges, errors, conflictBanner, widthPx, scrollTo,
+  src, setSrc, highlighted, srcLines, selected, stepRanges, errors, conflictBanner, widthPx, scrollTo, dagScrollTo,
 }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -149,6 +151,7 @@ export function SourcePane({
   const initialScrollDone = useRef(false);
   const [fontScale, setFontScale] = useState(1);
   const [popover, setPopover] = useState<PopoverState | null>(null);
+  const [flashNonce, setFlashNonce] = useState(0);
   const { schema } = useFormulaSchema();
 
   const lineH = BASE_LINE_HEIGHT * fontScale;
@@ -198,6 +201,16 @@ export function SourcePane({
     textareaRef.current.scrollTop = Math.max(0, top - 60);
     textareaRef.current.focus();
   }, [scrollTo, lineH]);
+
+  // DAG-node click: scroll source to the matched [[steps]] block and flash it.
+  // Uses a nonce so clicking the same node twice re-scrolls and re-flashes.
+  useEffect(() => {
+    if (!dagScrollTo || !textareaRef.current) return;
+    const r = stepRanges.find(rr => rr.id === dagScrollTo.id);
+    if (!r) return;
+    textareaRef.current.scrollTop = Math.max(0, r.startLine * lineH - 60);
+    setFlashNonce(n => n + 1);
+  }, [dagScrollTo, lineH, stepRanges]);
 
   // Close popup on zoom changes — position would be stale.
   useEffect(() => { setPopover(null); }, [fontScale]);
@@ -318,6 +331,16 @@ export function SourcePane({
               top: range.startLine * lineH,
               height: (range.endLine - range.startLine + 1) * lineH,
             }} />
+          )}
+          {range && flashNonce > 0 && (
+            <div
+              key={flashNonce}
+              className="ed-src-hl flash"
+              style={{
+                top: range.startLine * lineH,
+                height: (range.endLine - range.startLine + 1) * lineH,
+              }}
+            />
           )}
           {highlighted.map((segs, i) => (
             <div key={i} style={{ height: lineH, position: 'relative' }}>

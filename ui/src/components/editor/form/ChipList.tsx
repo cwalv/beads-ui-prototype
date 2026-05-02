@@ -4,9 +4,10 @@ interface Props {
   values: string[];
   onChange: (values: string[]) => void;
   placeholder?: string;
+  suggestions?: string[];
 }
 
-export function ChipList({ values, onChange, placeholder = 'Add…' }: Props) {
+export function ChipList({ values, onChange, placeholder = 'Add…', suggestions }: Props) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -41,15 +42,24 @@ export function ChipList({ values, onChange, placeholder = 'Add…' }: Props) {
         </span>
       ))}
       {adding ? (
-        <input
-          ref={inputRef}
-          className="fm-chip-input"
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          onKeyDown={onKey}
-          onBlur={commit}
-          placeholder={placeholder}
-        />
+        <>
+          {suggestions && (
+            <datalist id="fm-chip-suggestions">
+              {suggestions.filter(s => !values.includes(s)).map(s => <option key={s} value={s} />)}
+            </datalist>
+          )}
+          <input
+            ref={inputRef}
+            className="fm-chip-input"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={onKey}
+            onBlur={commit}
+            placeholder={placeholder}
+            list={suggestions ? 'fm-chip-suggestions' : undefined}
+          />
+      ) : (
+        </>
       ) : (
         <button className="fm-chip-add" onClick={startAdding}>+</button>
       )}

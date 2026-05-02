@@ -28,7 +28,7 @@ async function fetchMoleculeDetail(
   signal: AbortSignal,
 ): Promise<{ root: Bead; children: Bead[] }> {
   const root = await bdClient.fetch<Bead>(['show', id, '--json'], { signal });
-  const childIds = (root.dependencies ?? []).map(d => d.depends_on_id);
+  const childIds = (root.dependencies ?? []).map(d => d.id);
   const children = await Promise.all(
     childIds.map(cid => bdClient.fetch<Bead>(['show', cid, '--json'], { signal })),
   );

@@ -8,7 +8,7 @@ interface Props {
   onToggleType: (t: string) => void;
 }
 
-const ALL_STATUSES: BeadStatus[] = ['open', 'in_progress', 'blocked', 'deferred', 'closed'];
+const ALL_STATUSES: BeadStatus[] = ['open', 'in_progress', 'blocked', 'deferred', 'closed', 'pinned', 'hooked'];
 
 const STATUS_COLOR: Record<BeadStatus, string> = {
   open: 'var(--mute)',
@@ -16,6 +16,8 @@ const STATUS_COLOR: Record<BeadStatus, string> = {
   blocked: 'var(--danger)',
   deferred: 'var(--ink-3)',
   closed: 'var(--mute-2)',
+  pinned: 'var(--ink-3)',
+  hooked: 'var(--accent)',
 };
 
 const STATUS_LABEL: Record<BeadStatus, string> = {
@@ -24,6 +26,8 @@ const STATUS_LABEL: Record<BeadStatus, string> = {
   blocked: 'blocked',
   deferred: 'deferred',
   closed: 'closed',
+  pinned: 'pinned',
+  hooked: 'hooked',
 };
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -47,7 +51,8 @@ export function GraphFilterRail({ nodes, hiddenStatuses, hiddenTypes, onToggleSt
   const typesPresent = new Set<string>();
 
   for (const node of nodes) {
-    statusCounts.set(node.bead.status, (statusCounts.get(node.bead.status) ?? 0) + 1);
+    const s = node.bead.status as BeadStatus;
+    statusCounts.set(s, (statusCounts.get(s) ?? 0) + 1);
     if (node.bead.type) typesPresent.add(node.bead.type);
   }
 

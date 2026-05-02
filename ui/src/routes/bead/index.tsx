@@ -1,22 +1,20 @@
-// fo-zz4pz §4: shared peek drawer stub
-import { useParams, Outlet } from 'react-router-dom';
-import { PeekDrawer } from '../../components/chrome/PeekDrawer';
-import { StubBanner } from '../../components/chrome/StubBanner';
+import { Suspense, lazy } from 'react';
 
-export default function BeadRoute() {
-  const { beadId = '' } = useParams<{ beadId: string }>();
+// Deep-link fallback for `/bead/:beadId`. The drawer itself is rendered
+// by App.tsx's modal-Routes pass; this component supplies the underlying
+// view that the drawer overlays. For in-app navigation the underlying
+// view comes from `state.backgroundLocation` (see App.tsx).
+//
+// Default underlying view: Observe · Queue. The bead spec (fo-1w8xo)
+// names this as the configured-default; revisit once a per-user setting
+// exists.
 
+const ObserveQueue = lazy(() => import('../observe/queue'));
+
+export default function BeadDeepLinkUnderlay() {
   return (
-    <>
-      <Outlet />
-      <PeekDrawer kind="bead" id={beadId} title={`Bead ${beadId}`} status="open">
-        <StubBanner
-          title="Bead detail (peek)"
-          description="Shared overlay opened from any row across destinations — Fleet, Queue, search, etc."
-          bead="fo-zz4pz"
-          prototypeRef="prototype-v1/wf-views.jsx:IssueDetail"
-        />
-      </PeekDrawer>
-    </>
+    <Suspense fallback={null}>
+      <ObserveQueue />
+    </Suspense>
   );
 }

@@ -1,12 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useSetFooter } from '../../hooks/useSetFooter';
 import { useMoleculeGraph } from '../../hooks/useMoleculeGraph';
-import { usePeek } from '../../hooks/usePeek';
+import { useOpenPeek, useActivePeekId } from '../../hooks/usePeek';
 import { GraphCanvas } from '../../components/observe/GraphCanvas';
 import { GraphFilterRail } from '../../components/observe/GraphFilterRail';
-import { PeekDrawer } from '../../components/chrome/PeekDrawer';
-import { IssuePeekBody } from '../../components/peek/IssuePeekBody';
 import { LoadingFailedBanner } from '../../components/errors/LoadingFailedBanner';
 import { ObserveNav } from '../../components/observe/ObserveNav';
 import type { Destination, BeadStatus } from '../../types';
@@ -20,17 +18,28 @@ export default function ObserveGraph() {
   const { moleculeId = '' } = useParams<{ moleculeId: string }>();
   const [depth, setDepth] = useState(3);
   const { graph, loading, error, refresh, patchNode } = useMoleculeGraph(moleculeId, depth);
-  const { peekId, open, close } = usePeek();
+  const { open } = useOpenPeek();
+  const peekId = useActivePeekId();
 
   const [hiddenStatuses, setHiddenStatuses] = useState<Set<BeadStatus>>(new Set());
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
 
+  // Cross-component: peek body emits `bead-patched` after a successful
+  // edit so views like this canvas can refresh node labels without
+  // refetching. See IssuePeekBody / BeadModal.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ id: string; patch: Partial<{ title: string; status: string; priority: number }> }>).detail;
+      if (detail) patchNode(detail.id, detail.patch);
+    };
+    window.addEventListener('bead-patched', handler);
+    return () => window.removeEventListener('bead-patched', handler);
+  }, [patchNode]);
+
   const visibleNodes = graph?.nodes.filter(n =>
-    !hiddenStatuses.has(n.bead.status) &&
+    !hiddenStatuses.has(n.bead.status as BeadStatus) &&
     (!n.bead.type || !hiddenTypes.has(n.bead.type))
   ) ?? [];
-
-  const peekNode = graph?.nodes.find(n => n.id === peekId);
 
   const stats = graph ? {
     total: graph.nodes.length,
@@ -133,17 +142,7 @@ export default function ObserveGraph() {
           </>
         )}
       </div>
-      {peekId && (
-        <PeekDrawer
-          kind="bead"
-          id={peekId}
-          title={peekNode?.bead.title ?? peekId}
-          status={peekNode?.bead.status ?? 'open'}
-        >
-          <IssuePeekBody beadId={peekId} onClose={close} onNodePatch={patchNode} />
-        </PeekDrawer>
-      )}
-    </div>
+      </div>
     </div>
   );
 }

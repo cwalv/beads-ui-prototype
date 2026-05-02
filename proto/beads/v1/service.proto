@@ -1,0 +1,162 @@
+// beads.v1 — read-side service surface.
+//
+// v1 covers reads only. Write-side RPCs (Create/Update/Close/Comment, dep
+// mutations) are deferred to v2 (see Decision 1 in
+// projects/foundations/docs/beads-ui/architecture-decisions.md).
+//
+// Wire format is JSON via protojson on existing REST endpoints; gRPC is
+// not used in v1.
+
+syntax = "proto3";
+
+package beads.v1;
+
+import "beads/v1/formula.proto";
+import "beads/v1/types.proto";
+
+option go_package = "github.com/cwalv/beads-ui-prototype/proto/gen/go/beads/v1;beadsv1";
+
+// BeadsService is the read-side bd interface. All RPCs scope by workspace
+// name; the resolver looks up the corresponding `.beads/` root.
+service BeadsService {
+  // List returns issues matching the filter, with dependency / comment
+  // counts populated. Mirrors `bd list --json`.
+  rpc List(ListRequest) returns (ListResponse);
+  // Show returns full issue details including labels, dependencies (with
+  // depended-on bead expanded), dependents, comments, computed parent,
+  // and epic-progress fields. Mirrors `bd show <id> --json`.
+  rpc Show(ShowRequest) returns (ShowResponse);
+  // Ready returns ready-to-work issues (and optionally a blocked /
+  // explanation breakdown). Mirrors `bd ready --json`.
+  rpc Ready(ReadyRequest) returns (ReadyResponse);
+  // ListWorkspaces enumerates workspaces configured at the bd-server.
+  rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
+  // GetFormulaSchema returns the per-scope formula field schema.
+  rpc GetFormulaSchema(GetFormulaSchemaRequest) returns (GetFormulaSchemaResponse);
+  // ListFormulas returns formula files in a configured formula dir.
+  rpc ListFormulas(ListFormulasRequest) returns (ListFormulasResponse);
+}
+
+// ===== List =====
+
+message ListRequest {
+  // Workspace name (matches a bd-server-configured workspace).
+  string workspace = 1;
+  // Optional filters; left empty defaults to bd's default scope.
+  optional string status = 2;
+  optional string type = 3;
+  optional string assignee = 4;
+  // Filter by metadata key=value (top-level, AND across multiple).
+  map<string, string> metadata_fields = 5;
+  // Filter by metadata key existence (no value match).
+  repeated string has_metadata_keys = 6;
+  // Maximum rows; bd defaults apply when unset.
+  optional int32 limit = 7;
+  reserved 8 to 19;
+}
+
+message ListResponse {
+  repeated Bead beads = 1;
+  // True when results were truncated by `limit`.
+  bool truncated = 2;
+  reserved 3 to 19;
+}
+
+// ===== Show =====
+
+message ShowRequest {
+  string workspace = 1;
+  // One or more issue IDs. bd resolves cross-prefix routing per ID.
+  repeated string ids = 2;
+  reserved 3 to 19;
+}
+
+message ShowResponse {
+  // One bead per requested ID, in request order. Missing IDs are omitted.
+  repeated Bead beads = 1;
+  // IDs that could not be resolved.
+  repeated string not_found = 2;
+  reserved 3 to 19;
+}
+
+// ===== Ready =====
+
+message ReadyRequest {
+  string workspace = 1;
+  optional string assignee = 2;
+  // Filter by metadata key=value (e.g. `gc.routed_to=foundations/worker`).
+  map<string, string> metadata_fields = 3;
+  // When true, restrict to rows with no assignee.
+  bool unassigned = 4;
+  // When true, return a `ReadyExplanation`-style payload that includes
+  // blocked items, cycles, and per-row reasoning.
+  bool explain = 5;
+  optional int32 limit = 6;
+  reserved 7 to 19;
+}
+
+message ReadyItem {
+  Bead bead = 1;
+  // Human-readable summary of why this row is ready.
+  string reason = 2;
+  // Blockers that have already cleared (informational).
+  repeated string resolved_blockers = 3;
+}
+
+message BlockedItem {
+  Bead bead = 1;
+  // Issue IDs currently blocking this row.
+  repeated string blocked_by = 2;
+  string reason = 3;
+}
+
+message ReadyExplanation {
+  repeated ReadyItem ready = 1;
+  repeated BlockedItem blocked = 2;
+  // Detected dependency cycles, each as an ordered list of issue IDs.
+  message Cycle {
+    repeated string ids = 1;
+  }
+  repeated Cycle cycles = 3;
+}
+
+message ReadyResponse {
+  // Plain ready list, returned when `explain` was false.
+  repeated Bead beads = 1;
+  // Populated when `explain` was true; `beads` is empty in that case.
+  optional ReadyExplanation explanation = 2;
+  reserved 3 to 19;
+}
+
+// ===== Workspaces =====
+
+message ListWorkspacesRequest {
+  reserved 1 to 19;
+}
+
+message ListWorkspacesResponse {
+  repeated Workspace workspaces = 1;
+  reserved 2 to 19;
+}
+
+// ===== Formulas =====
+
+message GetFormulaSchemaRequest {
+  reserved 1 to 19;
+}
+
+message GetFormulaSchemaResponse {
+  FormulaSchema schema = 1;
+  reserved 2 to 19;
+}
+
+message ListFormulasRequest {
+  // bd-server-configured formula directory name (e.g. "local", "shared").
+  string dir = 1;
+  reserved 2 to 19;
+}
+
+message ListFormulasResponse {
+  repeated FormulaEntry formulas = 1;
+  reserved 2 to 19;
+}
