@@ -1,7 +1,7 @@
 import { formatAge } from '../../lib/age';
 import { workspaceColor } from '../../lib/workspace-color';
 import type { FleetMolecule } from '../../client/fleet';
-import type { StatusRollup } from '../../lib/molecule-agg';
+import type { StatusRollup } from '../../conventions';
 
 interface Props {
   molecule: FleetMolecule;

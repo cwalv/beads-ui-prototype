@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { listInstances } from '../../client/formula';
-import type { FormulaInstance } from '../../client/formula';
 import { useNavigate } from 'react-router-dom';
+import { bdClient } from '../../client/bd';
+import { getActivePack, type FormulaInstanceItem } from '../../conventions';
 
 interface Props {
   formulaName: string;
@@ -16,16 +16,27 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export function InstancesView({ formulaName, workspace }: Props) {
-  const [instances, setInstances] = useState<FormulaInstance[]>([]);
+  const [instances, setInstances] = useState<FormulaInstanceItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unsupported, setUnsupported] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     const ctrl = new AbortController();
+    const pack = getActivePack();
+    if (!pack.capabilities.formulaInstances || !pack.listInstancesByFormula) {
+      setUnsupported(true);
+      setLoading(false);
+      return () => ctrl.abort();
+    }
+    setUnsupported(false);
     setLoading(true);
     setError(null);
-    listInstances(formulaName, workspace, ctrl.signal)
+    pack.listInstancesByFormula(
+      { driver: bdClient, workspace, signal: ctrl.signal },
+      formulaName,
+    )
       .then(rows => {
         if (!ctrl.signal.aborted) setInstances(rows);
       })
@@ -44,12 +55,17 @@ export function InstancesView({ formulaName, workspace }: Props) {
 
   return (
     <div className="ed-inst">
+      {unsupported && (
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--mute)', marginBottom: 12 }}>
+          Instances view not supported by the active orchestrator pack.
+        </div>
+      )}
       {error && (
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--mute)', marginBottom: 12 }}>
           Instances data unavailable — couldn't reach bd. {error}
         </div>
       )}
-      {!error && instances.length === 0 && (
+      {!error && !unsupported && instances.length === 0 && (
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--mute)', marginBottom: 12 }}>
           No molecules poured from this formula — or instances data not yet wired (see fo-beads-ui-observe).
         </div>
@@ -71,7 +87,7 @@ export function InstancesView({ formulaName, workspace }: Props) {
               <span className="st" style={{ color: STATUS_COLOR[r.status] ?? 'var(--mute)' }}>
                 ● {r.status}
               </span>
-              <span className="at">{r.updated_at ? new Date(r.updated_at).toLocaleDateString() : ''}</span>
+              <span className="at">{r.updatedAt ? new Date(r.updatedAt).toLocaleDateString() : ''}</span>
             </div>
           ))}
         </>

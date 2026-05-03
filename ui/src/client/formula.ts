@@ -1,7 +1,11 @@
 // Typed wrappers for bd-server formula endpoints.
 // Raw TOML read/write via GET/PUT /formulas/<dir>/<name>
 // Cook preview via POST /bd → bd cook
-// Instances via POST /bd → bd list
+//
+// Listing molecule instances poured from a formula is a pack-specific
+// query (gascity uses metadata.gc.formula); see conventions/packs/gascity
+// listInstancesByFormula. Other formula primitives are bd-server-level
+// and stay here.
 
 import { bdClient } from './bd';
 import stubFormulas from './stubs/stub-formulas.json';
@@ -47,15 +51,6 @@ export interface CookResult {
   formula: string;
   vars: Record<string, string>;
   steps: CookStep[];
-}
-
-export interface FormulaInstance {
-  id: string;
-  title: string;
-  status: string;
-  created_at?: string;
-  updated_at?: string;
-  metadata?: Record<string, unknown>;
 }
 
 function formulaURL(dir: string, name: string): string {
@@ -137,13 +132,3 @@ export async function cookFormula(
   return result.steps ?? [];
 }
 
-export async function listInstances(
-  formulaName: string,
-  workspace: string,
-  signal?: AbortSignal,
-): Promise<FormulaInstance[]> {
-  return bdClient.fetch<FormulaInstance[]>(
-    ['list', '--type=molecule', `--metadata-field`, `gc.formula=${formulaName}`],
-    { workspace, signal },
-  );
-}
