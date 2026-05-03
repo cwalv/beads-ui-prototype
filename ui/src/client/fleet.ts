@@ -33,31 +33,17 @@ function toMolecule(item: FleetItem, workspace: string): FleetMolecule {
   };
 }
 
+// Per-workspace cache of the previous tick's FleetItems, keyed by workspace
+// name. Maintained internally so useFleetPoll's FleetMolecule[] state can
+// stay UI-shaped while still letting the pack reuse unchanged details.
+const fleetItemCache = new Map<string, FleetItem[]>();
+
 export async function listLiveMolecules(
   workspaceNames: string[],
-  prev: FleetMolecule[],
+  _prev: FleetMolecule[],
   signal: AbortSignal,
 ): Promise<FleetResult> {
   const pack = getActivePack();
-
-  // Group prev cache by workspace so each pack call sees only its own
-  // workspace's prior items.
-  const prevByWs = new Map<string, FleetItem[]>();
-  for (const m of prev) {
-    const arr = prevByWs.get(m.workspace) ?? [];
-    arr.push({
-      id: m.id,
-      title: m.title,
-      primaryLabel: '',
-      primaryTone: 'info',
-      progress: m.agg.progress,
-      badges: [],
-      createdAt: m.createdAt,
-      updatedAt: m.updatedAt,
-      packData: { agg: m.agg } satisfies GascityFleetData,
-    });
-    prevByWs.set(m.workspace, arr);
-  }
 
   const wsResults = await Promise.allSettled(
     workspaceNames.map(ws =>
@@ -65,7 +51,7 @@ export async function listLiveMolecules(
         driver: bdClient,
         workspace: ws,
         signal,
-        prev: prevByWs.get(ws),
+        prev: fleetItemCache.get(ws),
       }),
     ),
   );
@@ -74,12 +60,19 @@ export async function listLiveMolecules(
   const molecules: FleetMolecule[] = [];
 
   wsResults.forEach((r, i) => {
+    const ws = workspaceNames[i];
     if (r.status === 'fulfilled') {
-      for (const item of r.value) molecules.push(toMolecule(item, workspaceNames[i]));
+      fleetItemCache.set(ws, r.value);
+      for (const item of r.value) molecules.push(toMolecule(item, ws));
     } else {
-      unreachableWorkspaces.push(workspaceNames[i]);
+      unreachableWorkspaces.push(ws);
     }
   });
+
+  // Drop cache entries for workspaces no longer in the active set.
+  for (const ws of fleetItemCache.keys()) {
+    if (!workspaceNames.includes(ws)) fleetItemCache.delete(ws);
+  }
 
   if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
