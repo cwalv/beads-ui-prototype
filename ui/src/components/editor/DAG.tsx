@@ -4,6 +4,8 @@ import type { Step, ParseError } from '../../lib/formula-parse';
 import type { DAGLayout } from '../../lib/dag-layout';
 import { useDagOverrides } from '../../hooks/useDagOverrides';
 import { HintDot } from '../ui/HintDot';
+import { getActivePack } from '../../conventions';
+import type { Badge } from '../../conventions';
 
 interface Props {
   formulaName: string;
@@ -223,9 +225,14 @@ export function DAG({ formulaName, steps, layout, selected, onSelect, errors }: 
           if (!n) return null;
           const isSel = s.id === selected;
           const isCyc = s.id ? cycleIds.has(s.id) : false;
-          const mdKeys = s.metadata ? Object.keys(s.metadata) : [];
-          const gcKeys = mdKeys.filter(k => k.startsWith('gc.'));
           const hasHeightOverride = s.id != null && overrides[s.id]?.h !== undefined;
+          const pack = getActivePack();
+          const md = s.metadata ?? {};
+          const packBadges: Array<{ conceptKey: string; badge: Badge }> = [];
+          for (const rule of pack.badgeRules) {
+            const badge = rule.apply(md);
+            if (badge) packBadges.push({ conceptKey: rule.conceptKey, badge });
+          }
           return (
             <div
               key={s.id ?? i}
@@ -246,7 +253,7 @@ export function DAG({ formulaName, steps, layout, selected, onSelect, errors }: 
                 <span className="id">{s.id || '(no id)'}</span>
               </div>
               <div className="nt">{s.title || <em style={{ color: 'var(--mute)' }}>(no title)</em>}</div>
-              {(s.retry || gcKeys.length > 0) && (
+              {(s.retry || packBadges.length > 0) && (
                 <div className="nb">
                   {s.retry && (
                     <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
@@ -254,19 +261,12 @@ export function DAG({ formulaName, steps, layout, selected, onSelect, errors }: 
                       <HintDot conceptKey="retry" />
                     </span>
                   )}
-                  {gcKeys.includes('gc.continuation_group') && (
-                    // TODO fo-zz4pz §7: continuation-group swimlane rendering — colored bands/lanes vs DAG node coloring TBD at design review
-                    <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                      ⎇ {String(s.metadata['gc.continuation_group'])}
-                      <HintDot conceptKey="continuation-group" />
+                  {packBadges.map(({ conceptKey, badge }) => (
+                    <span key={conceptKey} className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                      {badge.label}
+                      <HintDot conceptKey={conceptKey} />
                     </span>
-                  )}
-                  {s.metadata['gc.session_affinity'] === 'require' && (
-                    <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                      📌 session
-                      <HintDot conceptKey="session-affinity" />
-                    </span>
-                  )}
+                  ))}
                 </div>
               )}
               <div className="ed-node-resize" onMouseDown={e => s.id && onResizeMouseDown(e, s.id)} />

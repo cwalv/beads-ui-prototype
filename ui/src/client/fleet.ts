@@ -1,7 +1,12 @@
 import { bdClient } from './bd';
-import type { Bead } from '../types';
-import { computeAgg, type MoleculeAgg } from '../lib/molecule-agg';
+import { getActivePack } from '../conventions';
+import type { FleetItem, GascityFleetData, MoleculeAgg } from '../conventions';
 
+// FleetMolecule is the gascity-shaped row used by the Fleet UI in v1.
+// The pack returns abstract FleetItem; this layer narrows packData into
+// the gascity MoleculeAgg shape that FleetRow / FleetSummary already
+// know how to render. When a non-gascity pack lands, this file grows
+// per-pack adapters or the Fleet UI moves onto FleetItem directly.
 export interface FleetMolecule {
   id: string;
   title: string;
@@ -16,23 +21,16 @@ export interface FleetResult {
   unreachableWorkspaces: string[];
 }
 
-async function listMoleculeRoots(workspace: string, signal: AbortSignal): Promise<Bead[]> {
-  return bdClient.fetch<Bead[]>(
-    ['list', '--type=molecule', '--status=in_progress', '--json'],
-    { signal, workspace },
-  );
-}
-
-async function fetchMoleculeDetail(
-  id: string,
-  signal: AbortSignal,
-): Promise<{ root: Bead; children: Bead[] }> {
-  const root = await bdClient.fetch<Bead>(['show', id, '--json'], { signal });
-  const childIds = (root.dependencies ?? []).map(d => d.id);
-  const children = await Promise.all(
-    childIds.map(cid => bdClient.fetch<Bead>(['show', cid, '--json'], { signal })),
-  );
-  return { root, children };
+function toMolecule(item: FleetItem, workspace: string): FleetMolecule {
+  const { agg } = item.packData as GascityFleetData;
+  return {
+    id: item.id,
+    title: item.title,
+    workspace,
+    agg,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
 }
 
 export async function listLiveMolecules(
@@ -40,56 +38,50 @@ export async function listLiveMolecules(
   prev: FleetMolecule[],
   signal: AbortSignal,
 ): Promise<FleetResult> {
-  // Fan out one query per workspace in parallel
+  const pack = getActivePack();
+
+  // Group prev cache by workspace so each pack call sees only its own
+  // workspace's prior items.
+  const prevByWs = new Map<string, FleetItem[]>();
+  for (const m of prev) {
+    const arr = prevByWs.get(m.workspace) ?? [];
+    arr.push({
+      id: m.id,
+      title: m.title,
+      primaryLabel: '',
+      primaryTone: 'info',
+      progress: m.agg.progress,
+      badges: [],
+      createdAt: m.createdAt,
+      updatedAt: m.updatedAt,
+      packData: { agg: m.agg } satisfies GascityFleetData,
+    });
+    prevByWs.set(m.workspace, arr);
+  }
+
   const wsResults = await Promise.allSettled(
-    workspaceNames.map(ws => listMoleculeRoots(ws, signal)),
+    workspaceNames.map(ws =>
+      pack.listFleetItems({
+        driver: bdClient,
+        workspace: ws,
+        signal,
+        prev: prevByWs.get(ws),
+      }),
+    ),
   );
 
   const unreachableWorkspaces: string[] = [];
-  const allRoots: Array<{ root: Bead; workspace: string }> = [];
+  const molecules: FleetMolecule[] = [];
 
   wsResults.forEach((r, i) => {
     if (r.status === 'fulfilled') {
-      for (const bead of r.value) allRoots.push({ root: bead, workspace: workspaceNames[i] });
+      for (const item of r.value) molecules.push(toMolecule(item, workspaceNames[i]));
     } else {
       unreachableWorkspaces.push(workspaceNames[i]);
     }
   });
 
   if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-
-  const prevById = new Map(prev.map(m => [m.id, m]));
-
-  const molecules = await Promise.all(
-    allRoots.map(async ({ root, workspace }): Promise<FleetMolecule> => {
-      const existing = prevById.get(root.id);
-      // Reuse agg if molecule hasn't changed since last tick
-      if (existing && existing.updatedAt === (root.updated_at ?? '')) {
-        return { ...existing, workspace };
-      }
-      try {
-        const { root: fullRoot, children } = await fetchMoleculeDetail(root.id, signal);
-        return {
-          id: fullRoot.id,
-          title: fullRoot.title,
-          workspace,
-          agg: computeAgg(fullRoot, children),
-          createdAt: fullRoot.created_at ?? '',
-          updatedAt: fullRoot.updated_at ?? '',
-        };
-      } catch {
-        // Partial failure: render with minimal agg rather than dropping the row
-        return {
-          id: root.id,
-          title: root.title,
-          workspace,
-          agg: computeAgg(root, []),
-          createdAt: root.created_at ?? '',
-          updatedAt: root.updated_at ?? '',
-        };
-      }
-    }),
-  );
 
   return { molecules, unreachableWorkspaces };
 }
