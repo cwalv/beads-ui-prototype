@@ -18,6 +18,7 @@ import {
   extractStepDescription,
 } from '../../lib/formula-write';
 import { ChipList } from '../../components/editor/form/ChipList';
+import { MarkdownField } from '../../components/editor/form/MarkdownField';
 import { StepCard } from '../../components/editor/form/StepCard';
 
 interface Props {
@@ -145,12 +146,11 @@ export function FormView({ src, setSrc, parsed, schema, schemaError, formulaName
 
           {/* description */}
           <FormRow label="description">
-            <textarea
-              className="fm-textarea"
+            <MarkdownField
               value={description}
               readOnly={!schema}
-              rows={6}
-              onChange={e => onTopLevel('description', e.target.value)}
+              onChange={v => onTopLevel('description', v)}
+              placeholder="Formula description…"
             />
           </FormRow>
 
@@ -384,11 +384,10 @@ function VarRow({ v, onChange, onRemove }: VarRowProps) {
         />
       </td>
       <td>
-        <input
-          type="text"
-          className="fm-input fm-input-sm"
+        <MarkdownField
           value={v.description}
-          onChange={e => onChange(v.name, 'description', e.target.value)}
+          onChange={val => onChange(v.name, 'description', val)}
+          placeholder="var description…"
         />
       </td>
       <td>
