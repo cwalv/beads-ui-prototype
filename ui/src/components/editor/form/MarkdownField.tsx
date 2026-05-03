@@ -6,7 +6,6 @@ const MAX_HEIGHT = 400;
 interface Props {
   value: string;
   onChange: (next: string) => void;
-  rows?: number;
   placeholder?: string;
   readOnly?: boolean;
 }
