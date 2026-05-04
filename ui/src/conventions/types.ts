@@ -73,6 +73,21 @@ export interface FormulaInstanceItem {
   updatedAt?: string;
 }
 
+// Pack-emitted event shape for Timeline view. Distinct from the proto
+// EventJson (audit-trail rows in bd's events table) — this covers both
+// bd lifecycle events and orchestrator-specific events (.gc/events.jsonl,
+// gastown logs, etc.) in a unified shape.
+export type EventTone = 'info' | 'warn' | 'error';
+
+export interface MoleculeEvent {
+  timestamp: string;                       // ISO 8601
+  type: string;                            // 'bead.created' | 'bead.started' | 'bead.closed' | 'comment.added' | 'gc.retry' | …
+  source: string;                          // 'bd' | 'gascity' | 'gastown' | …
+  beadId?: string;
+  payload: Record<string, unknown>;
+  display: { label: string; icon?: string; tone?: EventTone };
+}
+
 export interface OrchestratorPack {
   name: string;
   detect(workspace: WorkspaceInfo): boolean;
@@ -88,6 +103,11 @@ export interface OrchestratorPack {
   // Optional: list molecules instantiated from a given formula. Only
   // implemented when capabilities.formulaInstances is true.
   listInstancesByFormula?(ctx: PackContext, formulaName: string): Promise<FormulaInstanceItem[]>;
+
+  // Timeline events for a molecule. Default impl synthesizes from bd
+  // lifecycle (created/started/closed timestamps) and comments. Packs
+  // with richer event sources (e.g. gascity .gc/events.jsonl) augment.
+  getMoleculeEvents(rootId: string, ctx: PackContext): Promise<MoleculeEvent[]>;
 
   // Display rules
   badgeRules: BadgeRule[];
