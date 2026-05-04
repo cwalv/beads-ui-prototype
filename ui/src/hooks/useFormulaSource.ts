@@ -8,6 +8,8 @@ export interface FormulaSourceState {
   current: string;
   setCurrent: (src: string) => void;
   etag: string;
+  editability: 'writable' | 'pack-read-only';
+  packSource: string | undefined;
   loading: boolean;
   loadError: string | null;
   saveState: SaveState;
@@ -26,6 +28,8 @@ export function useFormulaSource(
   const [saved, setSaved] = useState('');
   const [current, setCurrent] = useState('');
   const [etag, setEtag] = useState('');
+  const [editability, setEditability] = useState<'writable' | 'pack-read-only'>('writable');
+  const [packSource, setPackSource] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -43,6 +47,8 @@ export function useFormulaSource(
       setSaved(result.raw);
       setCurrent(result.raw);
       setEtag(result.etag);
+      setEditability(result.editability);
+      setPackSource(result.packSource);
     } catch (e: unknown) {
       if (signal.aborted) return;
       const err = e as { message?: string; kind?: string };
@@ -107,6 +113,8 @@ export function useFormulaSource(
     current,
     setCurrent,
     etag,
+    editability,
+    packSource,
     loading,
     loadError,
     saveState,

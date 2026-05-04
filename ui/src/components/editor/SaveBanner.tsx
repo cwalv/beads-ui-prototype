@@ -5,9 +5,16 @@ interface Props {
   error: string | null;
   dirty: boolean;
   onSave: () => void;
+  packReadOnly?: boolean;
+  packSource?: string;
 }
 
-export function SaveBanner({ state, error, dirty, onSave }: Props) {
+export function SaveBanner({ state, error, dirty, onSave, packReadOnly, packSource }: Props) {
+  if (packReadOnly) return (
+    <div className="ed-save-banner">
+      <span className="sb-readonly">read-only · {packSource ?? 'pack formula'}</span>
+    </div>
+  );
   if (state === 'saving') return (
     <div className="ed-save-banner">
       <span className="sb-saving">saving…</span>

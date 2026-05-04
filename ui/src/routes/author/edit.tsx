@@ -56,6 +56,7 @@ export default function AuthorEdit() {
   const {
     current, setCurrent, loading, loadError,
     saveState, saveError, dirty, save, reload, forceOverwrite,
+    editability, packSource,
   } = useFormulaSource(dir, name, wsName);
 
   const [selected, setSelected] = useState<string | null>(null);
@@ -195,7 +196,14 @@ export default function AuthorEdit() {
           </Link>
         )}
         <div className="ed-spacer" />
-        <SaveBanner state={saveState} error={saveError} dirty={dirty} onSave={save} />
+        <SaveBanner
+          state={saveState}
+          error={saveError}
+          dirty={dirty}
+          onSave={save}
+          packReadOnly={editability === 'pack-read-only'}
+          packSource={packSource}
+        />
       </div>
 
       {/* Loading / error state */}
