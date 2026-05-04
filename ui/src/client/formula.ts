@@ -32,6 +32,8 @@ export interface FormulaSource {
   raw: string;
   etag: string;
   path: string;
+  editability: 'writable' | 'pack-read-only';
+  packSource?: string;
 }
 
 export interface CookStep {
@@ -74,7 +76,9 @@ export async function getFormulaSource(dir: string, name: string, signal?: Abort
   const raw = await res.text();
   const etag = res.headers.get('ETag') ?? '';
   const path = res.headers.get('X-Formula-Path') ?? '';
-  return { raw, etag, path };
+  const editability = (res.headers.get('X-Formula-Editability') ?? 'writable') as FormulaSource['editability'];
+  const packSource = res.headers.get('X-Formula-Pack-Source') ?? undefined;
+  return { raw, etag, path, editability, packSource };
 }
 
 export async function writeFormulaSource(
@@ -100,13 +104,20 @@ export async function writeFormulaSource(
     throw { kind: 'conflict', message: 'Formula changed on disk since you loaded it' };
   }
   if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw { kind: 'server', message: text || `bd-server returned ${res.status}`, status: res.status };
+    let message = `bd-server returned ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body?.error) message = body.error;
+    } catch {
+      const text = await res.text().catch(() => '');
+      if (text) message = text;
+    }
+    throw { kind: 'server', message, status: res.status };
   }
   const newRaw = await res.text().catch(() => raw);
   const newEtag = res.headers.get('ETag') ?? etag;
   const path = res.headers.get('X-Formula-Path') ?? '';
-  return { raw: newRaw || raw, etag: newEtag, path };
+  return { raw: newRaw || raw, etag: newEtag, path, editability: 'writable' };
 }
 
 export async function cookFormula(

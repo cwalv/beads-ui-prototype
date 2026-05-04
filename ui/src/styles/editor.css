@@ -59,6 +59,7 @@
 .ed-save-banner .sb-dirty { color: var(--warn); }
 .ed-save-banner .sb-error { color: var(--danger); }
 .ed-save-banner .sb-saving { color: var(--mute); }
+.ed-save-banner .sb-readonly { color: var(--mute); font-style: italic; }
 .ed-save-banner button {
   font-size: 11px; padding: 2px 8px;
   border: 1px solid var(--rule); border-radius: 2px;
