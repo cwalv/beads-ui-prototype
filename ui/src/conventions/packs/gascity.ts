@@ -11,6 +11,7 @@ import type {
   FleetItem,
   FormulaInstanceItem,
   KeyDisplayMap,
+  MoleculeEvent,
   OrchestratorPack,
   PackContext,
 } from '../types';
@@ -171,6 +172,92 @@ const metadataDisplay: KeyDisplayMap = {
   'gc.formula':             { label: 'formula' },
 };
 
+// ─── Timeline events ────────────────────────────────────────────────────────
+
+function beadLabel(bead: Bead, isRoot: boolean): string {
+  if (isRoot) return bead.title;
+  const ref = stepRef(bead);
+  if (ref) return phaseFromRef(ref);
+  const t = bead.title ?? bead.id;
+  return t.length > 50 ? `${t.slice(0, 50)}…` : t;
+}
+
+function lifecycleEvents(bead: Bead, isRoot: boolean): MoleculeEvent[] {
+  const events: MoleculeEvent[] = [];
+  const role = isRoot ? 'molecule' : 'step';
+  const lbl = beadLabel(bead, isRoot);
+
+  events.push({
+    timestamp: bead.created_at,
+    type: 'bead.created',
+    source: 'bd',
+    beadId: bead.id,
+    payload: { id: bead.id, title: bead.title, type: bead.type },
+    display: { label: `${role} created · ${lbl}`, icon: '○' },
+  });
+
+  if (bead.started_at) {
+    events.push({
+      timestamp: bead.started_at,
+      type: 'bead.started',
+      source: 'bd',
+      beadId: bead.id,
+      payload: { id: bead.id, title: bead.title, type: bead.type },
+      display: { label: `${role} started · ${lbl}`, icon: '◐', tone: 'info' },
+    });
+  }
+
+  if (bead.status === 'closed') {
+    const ts = bead.closed_at ?? bead.updated_at;
+    events.push({
+      timestamp: ts,
+      type: 'bead.closed',
+      source: 'bd',
+      beadId: bead.id,
+      payload: { id: bead.id, title: bead.title, type: bead.type },
+      display: { label: `${role} closed · ${lbl}`, icon: '✓' },
+    });
+  }
+
+  return events;
+}
+
+function commentEvents(bead: Bead): MoleculeEvent[] {
+  if (!bead.comments?.length) return [];
+  return bead.comments.map(c => {
+    const excerpt = c.text.length > 60 ? `${c.text.slice(0, 60)}…` : c.text;
+    return {
+      timestamp: c.created_at,
+      type: 'comment.added',
+      source: 'bd',
+      beadId: bead.id,
+      payload: { id: c.id, author: c.author, text: c.text },
+      display: { label: `${c.author}: ${excerpt}` },
+    };
+  });
+}
+
+async function getMoleculeEvents(
+  rootId: string,
+  { driver, workspace, signal }: PackContext,
+): Promise<MoleculeEvent[]> {
+  const root = await driver.fetch<Bead>(['show', rootId, '--json'], { workspace, signal });
+  const childIds = (root.dependencies ?? []).map(d => d.id);
+  const children = await Promise.all(
+    childIds.map(cid => driver.fetch<Bead>(['show', cid, '--json'], { workspace, signal })),
+  );
+
+  const events: MoleculeEvent[] = [
+    ...lifecycleEvents(root, true),
+    ...commentEvents(root),
+    ...children.flatMap(c => [...lifecycleEvents(c, false), ...commentEvents(c)]),
+  ];
+  events.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  return events;
+}
+
+// ─── Fleet ──────────────────────────────────────────────────────────────────
+
 async function listFleetItems({ driver, workspace, signal, prev }: PackContext): Promise<FleetItem[]> {
   const roots = await driver.fetch<Bead[]>(
     ['list', '--type=molecule', '--status=in_progress', '--json'],
@@ -232,6 +319,7 @@ export const gascityPack: OrchestratorPack = {
   },
   listFleetItems,
   listInstancesByFormula,
+  getMoleculeEvents,
   badgeRules,
   metadataDisplay,
 };
