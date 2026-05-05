@@ -16,9 +16,14 @@ export interface FleetMolecule {
   updatedAt: string;
 }
 
+export interface WorkspaceError {
+  workspace: string;
+  message: string;
+}
+
 export interface FleetResult {
   molecules: FleetMolecule[];
-  unreachableWorkspaces: string[];
+  workspaceErrors: WorkspaceError[];
 }
 
 function toMolecule(item: FleetItem, workspace: string): FleetMolecule {
@@ -56,7 +61,7 @@ export async function listLiveMolecules(
     ),
   );
 
-  const unreachableWorkspaces: string[] = [];
+  const workspaceErrors: WorkspaceError[] = [];
   const molecules: FleetMolecule[] = [];
 
   wsResults.forEach((r, i) => {
@@ -65,7 +70,8 @@ export async function listLiveMolecules(
       fleetItemCache.set(ws, r.value);
       for (const item of r.value) molecules.push(toMolecule(item, ws));
     } else {
-      unreachableWorkspaces.push(ws);
+      const message = r.reason instanceof Error ? r.reason.message : String(r.reason);
+      workspaceErrors.push({ workspace: ws, message });
     }
   });
 
@@ -76,5 +82,5 @@ export async function listLiveMolecules(
 
   if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
-  return { molecules, unreachableWorkspaces };
+  return { molecules, workspaceErrors };
 }

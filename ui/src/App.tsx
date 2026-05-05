@@ -58,6 +58,10 @@ function AppProviders({ children }: { children: React.ReactNode }) {
         ?? ws[0]
         ?? null;
       setCurrent_(initial);
+      // Persist the resolved workspace so reload doesn't re-run the
+      // paramWs/savedWs/ws[0] lottery if the server returns workspaces
+      // in a different order or paramWs doesn't match a real name.
+      if (initial) localStorage.setItem('beads-ui.lastWorkspace', initial.name);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load workspaces');
     } finally {
@@ -130,6 +134,11 @@ function AppShell() {
               <Route path="/observe/fleet" element={<ObserveFleet />} />
               <Route path="/observe/graph/:moleculeId" element={<ObserveGraph />} />
               <Route path="/observe/timeline/:moleculeId" element={<ObserveTimeline />} />
+              {/* Bare /observe/graph and /observe/timeline (no moleculeId) are
+                  drill-downs that need a target molecule. Send the user to
+                  Fleet to pick one rather than the global NotFound page. */}
+              <Route path="/observe/graph" element={<Navigate to="/observe/fleet" replace />} />
+              <Route path="/observe/timeline" element={<Navigate to="/observe/fleet" replace />} />
               <Route path="/observe/queue" element={<ObserveQueue />} />
               <Route path="/capture" element={<Capture />} />
               <Route path="/bead/:beadId" element={<BeadRoute />} />
@@ -140,9 +149,12 @@ function AppShell() {
 
             {/* Drawer modal route — renders on top of whatever the main
                 Routes block resolved (background location for in-app
-                navigation; the BeadRoute deep-link fallback otherwise). */}
+                navigation; the BeadRoute deep-link fallback otherwise).
+                The wildcard route absorbs every other path so React Router
+                doesn't log a "No routes matched" warning on every page. */}
             <Routes>
               <Route path="/bead/:beadId" element={<BeadModal />} />
+              <Route path="*" element={null} />
             </Routes>
           </Suspense>
         </ErrorBoundary>

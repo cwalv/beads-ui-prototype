@@ -16,7 +16,7 @@ export interface CreateBeadParams {
 }
 
 export async function createBead(params: CreateBeadParams): Promise<Bead> {
-  const args = ['create', '--json', '--title', params.title];
+  const args = ['create', '--title', params.title];
   if (params.description?.trim()) { args.push('--description'); args.push(params.description); }
   if (params.design?.trim()) { args.push('--design'); args.push(params.design); }
   if (params.acceptanceCriteria?.trim()) { args.push('--acceptance'); args.push(params.acceptanceCriteria); }
@@ -31,8 +31,10 @@ export async function createBead(params: CreateBeadParams): Promise<Bead> {
 
 export interface AddDepParams { from: string; to: string; type: DepType; }
 
-export async function getBead(id: string): Promise<Bead> {
-  return bdClient.fetch<Bead>(['show', id, '--json']);
+export async function getBead(id: string, workspace?: string): Promise<Bead> {
+  // bd show --json returns a single-element array, not the bead directly.
+  const result = await bdClient.fetch<Bead | Bead[]>(['show', id], workspace ? { workspace } : {});
+  return Array.isArray(result) ? result[0] : result;
 }
 
 export async function updateBead(id: string, patch: {
@@ -42,7 +44,7 @@ export async function updateBead(id: string, patch: {
   addLabel?: string; removeLabel?: string;
   addLabels?: string[]; removeLabels?: string[];
   externalRef?: string;
-}): Promise<void> {
+}, workspace?: string): Promise<void> {
   const args = ['update', id];
   if (patch.title !== undefined) { args.push('--title'); args.push(patch.title); }
   if (patch.description !== undefined) { args.push('--description'); args.push(patch.description); }
@@ -58,17 +60,17 @@ export async function updateBead(id: string, patch: {
   for (const l of patch.addLabels ?? []) { args.push('--add-label'); args.push(l); }
   for (const l of patch.removeLabels ?? []) { args.push('--remove-label'); args.push(l); }
   if (patch.externalRef !== undefined) args.push(`--external-ref=${patch.externalRef}`);
-  await bdClient.fetch<unknown>(args);
+  await bdClient.fetch<unknown>(args, workspace ? { workspace } : {});
 }
 
-export async function addComment(id: string, body: string): Promise<void> {
-  await bdClient.fetch<unknown>(['comment', id, body]);
+export async function addComment(id: string, body: string, workspace?: string): Promise<void> {
+  await bdClient.fetch<unknown>(['comment', id, body], workspace ? { workspace } : {});
 }
 
-export async function addDep(from: string, to: string, type: string): Promise<void> {
-  await bdClient.fetch<unknown>(['dep', 'add', from, to, `--type=${type}`]);
+export async function addDep(from: string, to: string, type: string, workspace?: string): Promise<void> {
+  await bdClient.fetch<unknown>(['dep', 'add', from, to, `--type=${type}`], workspace ? { workspace } : {});
 }
 
-export async function removeDep(from: string, to: string): Promise<void> {
-  await bdClient.fetch<unknown>(['dep', 'remove', from, to]);
+export async function removeDep(from: string, to: string, workspace?: string): Promise<void> {
+  await bdClient.fetch<unknown>(['dep', 'remove', from, to], workspace ? { workspace } : {});
 }

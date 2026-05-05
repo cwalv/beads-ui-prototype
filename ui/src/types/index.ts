@@ -91,18 +91,6 @@ export interface WorkspacesResponse {
   workspaces: Workspace[];
 }
 
-export interface BdError {
-  kind: 'network' | 'server' | 'parse';
-  message: string;
-  status?: number;
-}
-
-export interface BdResponse<T = unknown> {
-  ok: boolean;
-  data?: T;
-  error?: BdError;
-}
-
 // ===== Canonical value tables (string narrowings) =====
 //
 // The proto exposes status / type / dep_type as bare `string` because bd

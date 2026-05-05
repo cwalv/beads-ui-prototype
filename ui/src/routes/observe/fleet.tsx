@@ -52,7 +52,7 @@ export default function ObserveFleet() {
     return current ? [current.name] : [];
   }, [current, workspaces, isConsolidated]);
 
-  const { molecules, loading, error, lastTickAt, pauseReason, retryIn, unreachableWorkspaces } =
+  const { molecules, loading, error, lastTickAt, pauseReason, retryIn, workspaceErrors } =
     useFleetPoll(wsNames);
 
   const groups = useMemo(
@@ -73,7 +73,7 @@ export default function ObserveFleet() {
     ? 'loading fleet…'
     : `${molecules.length} molecule${molecules.length !== 1 ? 's' : ''} · ${wsNames.length} workspace${wsNames.length !== 1 ? 's' : ''}`;
   const footRight = (() => {
-    if (pauseReason === 'tab-hidden') return 'Observe · Fleet · paused (tab hidden)';
+    if (pauseReason === 'tab-hidden') return 'Observe · Fleet · tick 10s (tab hidden)';
     if (pauseReason === 'error-backoff') return `Observe · Fleet · paused · retry in ${retryIn}s`;
     return 'Observe · Fleet · tick 3s';
   })();
@@ -101,20 +101,25 @@ export default function ObserveFleet() {
         onGroupByChange={setGroupBy}
       />
 
-      {/* Unreachable workspace warning */}
-      {unreachableWorkspaces.length > 0 && (
+      {/* Per-workspace load failures (network errors AND bd-server response errors) */}
+      {workspaceErrors.length > 0 && (
         <div style={{
-          padding: '4px 20px',
+          padding: '6px 20px',
           background: 'var(--warn-soft)',
           borderBottom: '1px solid var(--warn)',
           fontSize: 11,
           color: 'var(--warn)',
           fontFamily: 'var(--font-mono)',
           flexShrink: 0,
-        }}
-          title={`Unreachable: ${unreachableWorkspaces.join(', ')}`}
-        >
-          {unreachableWorkspaces.length} workspace{unreachableWorkspaces.length !== 1 ? 's' : ''} unreachable
+        }}>
+          {workspaceErrors.map(({ workspace, message }) => (
+            <div key={workspace} style={{ display: 'flex', gap: 8 }}>
+              <span style={{ fontWeight: 600, flexShrink: 0 }}>{workspace}:</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={message}>
+                {message}
+              </span>
+            </div>
+          ))}
         </div>
       )}
 

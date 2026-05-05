@@ -171,9 +171,9 @@ describe('gascityPack — listFleetItems', () => {
     const fullRoot: Bead = { ...root, dependencies: [{ id: 's1', dep_type: 'parent-child' } as never] };
 
     const driver = makeDriver(new Map<string, unknown>([
-      ['list --type=molecule --status=in_progress --json', [root]],
-      ['show mol-1 --json', fullRoot],
-      ['show s1 --json', child],
+      ['list --type=molecule --status=in_progress', [root]],
+      ['show mol-1', fullRoot],
+      ['show s1', child],
     ]));
 
     const items = await gascityPack.listFleetItems({ driver, workspace: 'ws-a' });
@@ -197,7 +197,7 @@ describe('gascityPack — listFleetItems', () => {
       updated_at: '2026-04-01T00:00:00Z',
     });
     const driver = makeDriver(new Map<string, unknown>([
-      ['list --type=molecule --status=in_progress --json', [root]],
+      ['list --type=molecule --status=in_progress', [root]],
     ]));
     const cached = {
       id: 'mol-1',
@@ -235,7 +235,7 @@ describe('gascityPack — getMoleculeEvents', () => {
       created_at: '2026-04-01T00:00:00Z',
       dependencies: [],
     });
-    const driver = makeDriver(new Map([['show mol-1 --json', root]]));
+    const driver = makeDriver(new Map([['show mol-1', root]]));
     const events = await gascityPack.getMoleculeEvents('mol-1', { driver, workspace: 'ws-a' });
     expect(events.length).toBeGreaterThanOrEqual(1);
     const created = events.find(e => e.type === 'bead.created');
@@ -256,7 +256,7 @@ describe('gascityPack — getMoleculeEvents', () => {
       started_at: '2026-04-01T01:00:00Z',
       dependencies: [],
     } as Partial<Bead> & { id: string });
-    const driver = makeDriver(new Map([['show mol-1 --json', root]]));
+    const driver = makeDriver(new Map([['show mol-1', root]]));
     const events = await gascityPack.getMoleculeEvents('mol-1', { driver, workspace: 'ws-a' });
     const started = events.find(e => e.type === 'bead.started');
     expect(started).toBeDefined();
@@ -276,8 +276,8 @@ describe('gascityPack — getMoleculeEvents', () => {
     const step = makeStep('s1', 'closed', 'my-formula');
     // step has no closed_at, uses updated_at fallback
     const driver = makeDriver(new Map([
-      ['show mol-1 --json', root],
-      ['show s1 --json', step],
+      ['show mol-1', root],
+      ['show s1', step],
     ]));
     const events = await gascityPack.getMoleculeEvents('mol-1', { driver, workspace: 'ws-a' });
     const closed = events.find(e => e.type === 'bead.closed');
@@ -304,7 +304,7 @@ describe('gascityPack — getMoleculeEvents', () => {
         },
       ],
     } as Partial<Bead> & { id: string });
-    const driver = makeDriver(new Map([['show mol-1 --json', root]]));
+    const driver = makeDriver(new Map([['show mol-1', root]]));
     const events = await gascityPack.getMoleculeEvents('mol-1', { driver, workspace: 'ws-a' });
     const comment = events.find(e => e.type === 'comment.added');
     expect(comment).toBeDefined();
@@ -327,8 +327,8 @@ describe('gascityPack — getMoleculeEvents', () => {
     // step was created before root's updated_at
     const stepWithTs = { ...step, created_at: '2026-04-01T00:30:00Z' };
     const driver = makeDriver(new Map([
-      ['show mol-1 --json', root],
-      ['show s1 --json', stepWithTs],
+      ['show mol-1', root],
+      ['show s1', stepWithTs],
     ]));
     const events = await gascityPack.getMoleculeEvents('mol-1', { driver, workspace: 'ws-a' });
     for (let i = 1; i < events.length; i++) {

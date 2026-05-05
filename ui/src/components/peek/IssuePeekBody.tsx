@@ -1,16 +1,18 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { Bead, DepType } from '../../types';
+import type { Bead, Comment, DepType } from '../../types';
 import { getBead, updateBead, addComment, addDep, removeDep } from '../../client/bead';
 import { useOpenPeek } from '../../hooks/usePeek';
+import { renderMarkdown } from '../../lib/markdown-render';
 
 interface Props {
   beadId: string;
+  workspace?: string;
   onClose: () => void;
   onNodePatch?: (id: string, patch: Partial<{ title: string; status: string; priority: number }>) => void;
   onBeadLoaded?: (bead: Bead) => void;
 }
 
-type Tab = 'Overview' | 'Deps' | 'Comments' | 'Metadata' | 'Events';
+type Tab = 'Overview' | 'Deps' | 'Metadata' | 'Events';
 
 // Full canonical dep-type set (matches `DepType` in types/index.ts).
 // Convention library (fo-0qdg9) may eventually slice this per workspace,
@@ -75,11 +77,72 @@ function KVRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function CommentsBlock({
+  comments, error, draft, onDraftChange, onSubmit,
+}: {
+  comments: Comment[];
+  error: string | null;
+  draft: string;
+  onDraftChange: (s: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px solid var(--rule-2)' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--mute)' }}>comments</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--mute)' }}>{comments.length}</span>
+      </div>
+      {error && (
+        <div style={{ background: 'var(--warn-soft)', border: '1px solid var(--warn)', borderRadius: 2, padding: '4px 10px', fontSize: 11, color: 'var(--warn)', marginBottom: 6 }}>
+          {error}
+        </div>
+      )}
+      {comments.length === 0 && (
+        <div style={{ fontSize: 11, color: 'var(--mute)', fontStyle: 'italic' }}>No comments yet.</div>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {comments.map(c => (
+          <div key={c.id} style={{ borderBottom: '1px solid var(--rule-2)', paddingBottom: 6 }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 3 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--ink-2)' }}>{c.author ?? 'anon'}</span>
+              {c.created_at && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--mute)' }}>{formatDate(c.created_at)}</span>}
+            </div>
+            <div
+              className="md-body"
+              style={{ fontSize: 12.5, color: 'var(--ink)', lineHeight: 1.5 }}
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(c.text ?? '') }}
+            />
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <textarea
+          placeholder="Add a comment…"
+          value={draft}
+          onChange={e => onDraftChange(e.target.value)}
+          rows={3}
+          style={{ fontSize: 12, padding: '5px 8px', border: '1px solid var(--rule)', borderRadius: 2, fontFamily: 'var(--font-sans)', resize: 'vertical' }}
+        />
+        <button
+          onClick={onSubmit}
+          style={{ alignSelf: 'flex-end', fontSize: 11, padding: '3px 12px', border: '1px solid var(--accent)', borderRadius: 2, background: 'var(--accent-soft)', color: 'var(--accent)', cursor: 'pointer' }}
+        >
+          Add comment
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MarkdownSection({ title, body }: { title: string; body: string }) {
   return (
     <div style={{ marginTop: 8 }}>
       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--mute)', marginBottom: 4 }}>{title}</div>
-      <div style={{ fontSize: 12.5, color: 'var(--ink)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{children}</div>
+      <div
+        className="md-body"
+        style={{ fontSize: 12.5, color: 'var(--ink)', lineHeight: 1.5 }}
+        dangerouslySetInnerHTML={{ __html: renderMarkdown(body) }}
+      />
     </div>
   );
 }
@@ -121,7 +184,7 @@ function parseLabels(s: string): string[] {
   return s.split(',').map(l => l.trim()).filter(l => l.length > 0);
 }
 
-export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch, onBeadLoaded }: Props) {
+export function IssuePeekBody({ beadId, workspace, onClose: _onClose, onNodePatch, onBeadLoaded }: Props) {
   const { open: openPeek } = useOpenPeek();
   const [bead, setBead] = useState<Bead | null>(null);
   const [loading, setLoading] = useState(true);
@@ -153,7 +216,7 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch, onBeadLo
     setLoading(true);
     setFetchError(null);
     try {
-      const b = await getBead(beadId);
+      const b = await getBead(beadId, workspace);
       setBead(b);
       onBeadLoaded?.(b);
     } catch (e) {
@@ -161,7 +224,7 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch, onBeadLo
     } finally {
       setLoading(false);
     }
-  }, [beadId, onBeadLoaded]);
+  }, [beadId, workspace, onBeadLoaded]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -175,7 +238,7 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch, onBeadLo
   const hasMetadata = metadataEntries.length > 0;
 
   const TABS: Tab[] = useMemo(() => {
-    const tabs: Tab[] = ['Overview', 'Deps', 'Comments'];
+    const tabs: Tab[] = ['Overview', 'Deps'];
     if (hasMetadata) tabs.push('Metadata');
     if (hasEvents) tabs.push('Events');
     return tabs;
@@ -205,6 +268,12 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch, onBeadLo
   async function handleSave() {
     if (!bead) return;
     setSaveError(null);
+    if (editStatus === 'closed' && bead.status !== 'closed') {
+      const ok = window.confirm(
+        `Close bead ${beadId}?\n\nThis will mark it closed (bd close). You can reopen later via the status dropdown.`,
+      );
+      if (!ok) return;
+    }
     const patch: Parameters<typeof updateBead>[1] = {};
     if (editTitle !== bead.title) patch.title = editTitle;
     if (editDesc !== (bead.description ?? '')) patch.description = editDesc;
@@ -239,7 +308,7 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch, onBeadLo
     setEditMode(false);
 
     try {
-      await updateBead(beadId, patch);
+      await updateBead(beadId, patch, workspace);
       setSaveFlash(true);
       setTimeout(() => setSaveFlash(false), 2000);
       const nodePatch: Partial<{ title: string; status: string; priority: number }> = {};
@@ -264,7 +333,7 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch, onBeadLo
     if (!newDepId.trim()) return;
     setDepError(null);
     try {
-      await addDep(beadId, newDepId.trim(), newDepType);
+      await addDep(beadId, newDepId.trim(), newDepType, workspace);
       setNewDepId('');
       await load();
     } catch (e) {
@@ -275,7 +344,7 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch, onBeadLo
   async function handleRemoveDep(targetId: string) {
     setDepError(null);
     try {
-      await removeDep(beadId, targetId);
+      await removeDep(beadId, targetId, workspace);
       await load();
     } catch (e) {
       setDepError(e instanceof Error ? e.message : String(e));
@@ -286,7 +355,7 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch, onBeadLo
     if (!commentBody.trim()) return;
     setCommentError(null);
     try {
-      await addComment(beadId, commentBody.trim());
+      await addComment(beadId, commentBody.trim(), workspace);
       setCommentBody('');
       await load();
     } catch (e) {
@@ -308,9 +377,10 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch, onBeadLo
           color: 'var(--warn)',
           marginBottom: 8,
         }}>
-          {fetchError}
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Couldn't load bead {beadId}</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{fetchError}</div>
         </div>
-        <button onClick={load} style={{ fontSize: 11, padding: '3px 10px', cursor: 'pointer' }}>Retry</button>
+        <button onClick={load} style={{ fontSize: 11, padding: '3px 10px', cursor: 'pointer' }}>Reload bead</button>
       </div>
     );
   }
@@ -411,10 +481,17 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch, onBeadLo
             <KVRow label="due" value={formatDate(bead.due_at)} />
             <KVRow label="defer until" value={formatDate(bead.defer_until)} />
             <KVRow label="close reason" value={bead.close_reason} />
-            {bead.description && <Section title="description">{bead.description}</Section>}
-            {bead.design && <Section title="design">{bead.design}</Section>}
-            {bead.acceptance_criteria && <Section title="acceptance">{bead.acceptance_criteria}</Section>}
-            {bead.notes && <Section title="notes">{bead.notes}</Section>}
+            {bead.description && <MarkdownSection title="description" body={bead.description} />}
+            {bead.design && <MarkdownSection title="design" body={bead.design} />}
+            {bead.acceptance_criteria && <MarkdownSection title="acceptance" body={bead.acceptance_criteria} />}
+            {bead.notes && <MarkdownSection title="notes" body={bead.notes} />}
+            <CommentsBlock
+              comments={bead.comments ?? []}
+              error={commentError}
+              draft={commentBody}
+              onDraftChange={setCommentBody}
+              onSubmit={handleAddComment}
+            />
           </div>
         )}
 
@@ -599,42 +676,6 @@ export function IssuePeekBody({ beadId, onClose: _onClose, onNodePatch, onBeadLo
           </div>
         )}
 
-        {activeTab === 'Comments' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {commentError && (
-              <div style={{ background: 'var(--warn-soft)', border: '1px solid var(--warn)', borderRadius: 2, padding: '4px 10px', fontSize: 11, color: 'var(--warn)' }}>
-                {commentError}
-              </div>
-            )}
-            {(bead.comments ?? []).length === 0 && (
-              <div style={{ fontSize: 11, color: 'var(--mute)' }}>No comments yet.</div>
-            )}
-            {(bead.comments ?? []).map(c => (
-              <div key={c.id} style={{ borderBottom: '1px solid var(--rule-2)', paddingBottom: 8 }}>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 3 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--ink-2)' }}>{c.author ?? 'anon'}</span>
-                  {c.created_at && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--mute)' }}>{formatDate(c.created_at)}</span>}
-                </div>
-                <div style={{ fontSize: 12.5, color: 'var(--ink)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{c.text}</div>
-              </div>
-            ))}
-            <div style={{ borderTop: '1px solid var(--rule-2)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <textarea
-                placeholder="Add a comment…"
-                value={commentBody}
-                onChange={e => setCommentBody(e.target.value)}
-                rows={3}
-                style={{ fontSize: 12, padding: '5px 8px', border: '1px solid var(--rule)', borderRadius: 2, fontFamily: 'var(--font-sans)', resize: 'vertical' }}
-              />
-              <button
-                onClick={handleAddComment}
-                style={{ alignSelf: 'flex-end', fontSize: 11, padding: '3px 12px', border: '1px solid var(--accent)', borderRadius: 2, background: 'var(--accent-soft)', color: 'var(--accent)', cursor: 'pointer' }}
-              >
-                Add comment
-              </button>
-            </div>
-          </div>
-        )}
 
         {activeTab === 'Metadata' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

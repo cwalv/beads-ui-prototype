@@ -41,7 +41,7 @@ function emptyPollState(overrides: Partial<FleetPollState> = {}): FleetPollState
     lastTickAt: Date.now(),
     pauseReason: null,
     retryIn: null,
-    unreachableWorkspaces: [],
+    workspaceErrors: [],
     ...overrides,
   };
 }
@@ -160,13 +160,14 @@ describe('ObserveFleet route', () => {
     );
   });
 
-  it('shows unreachable workspace chip', async () => {
+  it('shows workspace error message in banner', async () => {
     vi.mocked(useFleetPoll).mockReturnValue(emptyPollState({
-      unreachableWorkspaces: ['broken-ws'],
+      workspaceErrors: [{ workspace: 'broken-ws', message: 'bd-server returned 400 (forbidden flag)' }],
     }));
     render(<Wrapper />);
     await waitFor(() =>
-      expect(screen.queryByText(/workspace.*unreachable/i)).toBeTruthy(), { timeout: 5000 }
+      expect(screen.queryByText(/broken-ws/)).toBeTruthy(), { timeout: 5000 }
     );
+    expect(screen.queryByText(/forbidden flag/)).toBeTruthy();
   });
 });

@@ -32,7 +32,7 @@ export const handle = {
 const DEFAULT_LENS: QueueLens = 'ready';
 const DEFAULT_GROUP_BY: GroupBy = 'priority';
 
-const VALID_LENSES: QueueLens[] = ['ready', 'ready-deferred', 'all'];
+const VALID_LENSES: QueueLens[] = ['ready', 'ready-deferred', 'all', 'closed'];
 const VALID_GROUPS: GroupBy[] = ['priority', 'status', 'formula', 'type', 'none'];
 
 function parseLens(value: string | null): QueueLens {

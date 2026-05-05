@@ -111,8 +111,13 @@ export function groupBeads(beads: Bead[], by: GroupBy): Map<string, Bead[]> {
 
 export function buildCliMirror(lens: QueueLens, filters: QueueFilters): string {
   const parts: string[] = [];
+  let defaultStatus: string | null = null;
   if (lens === 'all') {
-    parts.push('bd list', '--status=open,in_progress');
+    defaultStatus = '--status=open,in_progress,blocked,deferred';
+    parts.push('bd list', defaultStatus);
+  } else if (lens === 'closed') {
+    defaultStatus = '--status=closed';
+    parts.push('bd list', defaultStatus);
   } else {
     parts.push('bd ready');
     if (lens === 'ready-deferred') parts.push('--include-deferred');
@@ -122,11 +127,13 @@ export function buildCliMirror(lens: QueueLens, filters: QueueFilters): string {
   // bd ready / list accept a single --type; multi-type flagged in UI but mirror omits with note
   if (filters.priorities.length === 1) parts.push(`--priority=${filters.priorities[0]}`);
   if (filters.label) parts.push(`--label=${filters.label}`);
-  if (filters.statuses.length > 0 && lens === 'all') {
+  if (filters.statuses.length > 0 && (lens === 'all' || lens === 'closed')) {
     parts.push(`--status=${filters.statuses.join(',')}`);
     // dedupe: filter out the default --status above
-    const idx = parts.indexOf('--status=open,in_progress');
-    if (idx >= 0) parts.splice(idx, 1);
+    if (defaultStatus) {
+      const idx = parts.indexOf(defaultStatus);
+      if (idx >= 0) parts.splice(idx, 1);
+    }
   }
   if (filters.overdue) parts.push('--due-before=now');
   if (filters.q) parts.push(`# search: "${filters.q}"`);
@@ -134,6 +141,6 @@ export function buildCliMirror(lens: QueueLens, filters: QueueFilters): string {
 }
 
 export function isClaimable(b: Bead, lens: QueueLens): boolean {
-  if (lens === 'all') return false;
+  if (lens === 'all' || lens === 'closed') return false;
   return b.status === 'open' && (!b.assignee || b.assignee.length === 0);
 }

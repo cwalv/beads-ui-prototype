@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { PeekDrawer } from '../chrome/PeekDrawer';
 import { IssuePeekBody } from './IssuePeekBody';
 import { useOpenPeek } from '../../hooks/usePeek';
+import { useWorkspace } from '../../hooks/useWorkspace';
 import type { Bead } from '../../types';
 
 // Renders the peek drawer for the route `/bead/:beadId`. Mounted by App's
@@ -11,6 +12,7 @@ import type { Bead } from '../../types';
 export default function BeadModal() {
   const { beadId = '' } = useParams<{ beadId: string }>();
   const { close } = useOpenPeek();
+  const { current } = useWorkspace();
   const [head, setHead] = useState<{ title?: string; status?: string } | null>(null);
 
   // Stable so IssuePeekBody's load callback (which depends on this) does
@@ -29,6 +31,7 @@ export default function BeadModal() {
     >
       <IssuePeekBody
         beadId={beadId}
+        workspace={current?.name}
         onClose={close}
         onBeadLoaded={onBeadLoaded}
       />

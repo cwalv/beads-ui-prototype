@@ -12,9 +12,17 @@ const TOC_DEFAULT_PX = 240;
 const TOC_MIN_PX = 180;
 const TOC_STORAGE_KEY = 'beads-ui.docs-toc-px';
 
+// Strip leading YAML / TOML front-matter (--- … --- or +++ … +++) so the
+// renderer doesn't treat the metadata block as content. Anything before the
+// closing fence is dropped.
+function stripFrontMatter(raw: string): string {
+  const m = raw.match(/^(---|\+\+\+)\r?\n[\s\S]*?\r?\n\1\r?\n/);
+  return m ? raw.slice(m[0].length) : raw;
+}
+
 function buildToc(raw: string): TocEntry[] {
   const toc: TocEntry[] = [];
-  for (const line of raw.split('\n')) {
+  for (const line of stripFrontMatter(raw).split('\n')) {
     const m = line.match(/^(#{1,6})\s+(.+)/);
     if (m) {
       const text = m[2].trim();
@@ -46,7 +54,7 @@ export default function DocFile() {
 
   const doc = slug ? getDocBySlug(slug) : null;
 
-  const html = useMemo(() => doc ? renderMarkdown(doc.raw) : '', [doc]);
+  const html = useMemo(() => doc ? renderMarkdown(stripFrontMatter(doc.raw)) : '', [doc]);
   const toc = useMemo(() => doc ? buildToc(doc.raw) : [], [doc]);
 
   useSetFooter(

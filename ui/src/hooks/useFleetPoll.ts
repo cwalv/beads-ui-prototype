@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { listLiveMolecules, type FleetMolecule } from '../client/fleet';
+import { listLiveMolecules, type FleetMolecule, type WorkspaceError } from '../client/fleet';
 
 const DEFAULT_INTERVAL_MS =
   Number(import.meta.env.VITE_FLEET_POLL_INTERVAL_MS) ||
@@ -18,7 +18,7 @@ export interface FleetPollState {
   lastTickAt: number | null;
   pauseReason: PauseReason;
   retryIn: number | null;
-  unreachableWorkspaces: string[];
+  workspaceErrors: WorkspaceError[];
 }
 
 export function useFleetPoll(workspaceNames: string[]) {
@@ -29,7 +29,7 @@ export function useFleetPoll(workspaceNames: string[]) {
     lastTickAt: null,
     pauseReason: null,
     retryIn: null,
-    unreachableWorkspaces: [],
+    workspaceErrors: [],
   });
 
   const moleculesRef = useRef<FleetMolecule[]>([]);
@@ -46,16 +46,12 @@ export function useFleetPoll(workspaceNames: string[]) {
 
   const tick = useCallback(async () => {
     if (inFlightRef.current) return;
-    if (document.hidden) {
-      setState(s => ({ ...s, pauseReason: 'tab-hidden', retryIn: null }));
-      return;
-    }
     if (!wsNamesRef.current.length) return;
 
     inFlightRef.current = true;
     const controller = new AbortController();
     try {
-      const { molecules, unreachableWorkspaces } = await listLiveMolecules(
+      const { molecules, workspaceErrors } = await listLiveMolecules(
         wsNamesRef.current,
         moleculesRef.current,
         controller.signal,
@@ -68,9 +64,9 @@ export function useFleetPoll(workspaceNames: string[]) {
         loading: false,
         error: null,
         lastTickAt: Date.now(),
-        pauseReason: null,
+        pauseReason: document.hidden ? 'tab-hidden' : null,
         retryIn: null,
-        unreachableWorkspaces,
+        workspaceErrors,
       }));
       scheduleTick(
         document.hidden ? HIDDEN_INTERVAL_MS : DEFAULT_INTERVAL_MS,
@@ -94,7 +90,9 @@ export function useFleetPoll(workspaceNames: string[]) {
     }
   }, [scheduleTick]);
 
-  // Visibility gating: pause on hidden, fire immediately on visible
+  // Visibility gating: slow-poll on hidden (HIDDEN_INTERVAL_MS), fire immediately on visible
+  // Note: don't fully pause — viewing through tool windows (browser extension, IDE preview)
+  // reports document.hidden=true even when the user is actively looking at the tab.
   useEffect(() => {
     function onVisibility() {
       if (!document.hidden) {
@@ -102,7 +100,7 @@ export function useFleetPoll(workspaceNames: string[]) {
         tick();
       } else {
         setState(s => ({ ...s, pauseReason: 'tab-hidden' }));
-        if (timerRef.current !== null) clearTimeout(timerRef.current);
+        // don't clear timer — let the next scheduled tick fire on its slower cadence
       }
     }
     document.addEventListener('visibilitychange', onVisibility);
