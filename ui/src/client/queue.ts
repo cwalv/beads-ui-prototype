@@ -1,7 +1,7 @@
 import { bdClient } from './bd';
 import type { Bead } from '../types';
 
-export type QueueLens = 'ready' | 'ready-deferred' | 'all';
+export type QueueLens = 'ready' | 'ready-deferred' | 'all' | 'closed';
 
 export interface QueueResult {
   beads: Bead[];
@@ -23,11 +23,13 @@ export async function listQueueBeads(
 export function buildQueueArgs(lens: QueueLens): string[] {
   switch (lens) {
     case 'ready':
-      return ['ready', `--limit=${READY_LIMIT}`, '--json'];
+      return ['ready', `--limit=${READY_LIMIT}`];
     case 'ready-deferred':
-      return ['ready', `--limit=${READY_LIMIT}`, '--include-deferred', '--json'];
+      return ['ready', `--limit=${READY_LIMIT}`, '--include-deferred'];
     case 'all':
-      return ['list', '--status=open,in_progress', `--limit=${ALL_LIMIT}`, '--json'];
+      return ['list', '--status=open,in_progress,blocked,deferred', `--limit=${ALL_LIMIT}`];
+    case 'closed':
+      return ['list', '--status=closed', `--limit=${ALL_LIMIT}`];
   }
 }
 

@@ -6,6 +6,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5174,
+    allowedHosts: ['chost'],
     proxy: {
       '/v1': { target: 'http://127.0.0.1:7842', changeOrigin: false },
     },

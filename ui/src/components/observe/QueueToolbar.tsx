@@ -21,14 +21,15 @@ interface Props {
 const LENS_OPTIONS: Array<{ id: QueueLens; label: string; hint: string }> = [
   { id: 'ready',          label: 'ready',           hint: 'bd ready — work available now (default)' },
   { id: 'ready-deferred', label: 'ready+deferred',  hint: 'bd ready --include-deferred' },
-  { id: 'all',            label: 'all',             hint: 'bd list --status=open,in_progress' },
+  { id: 'all',            label: 'all',             hint: 'bd list --status=open,in_progress,blocked,deferred' },
+  { id: 'closed',         label: 'closed',          hint: 'bd list --status=closed' },
 ];
 
 const GROUP_OPTIONS: GroupBy[] = ['priority', 'status', 'formula', 'type', 'none'];
 
-const TYPE_OPTIONS = ['task', 'bug', 'feature', 'epic', 'chore', 'decision', 'molecule'];
+const TYPE_OPTIONS = ['task', 'bug', 'feature', 'epic', 'chore', 'decision', 'molecule', 'convoy', 'message'];
 const PRIORITY_OPTIONS = [0, 1, 2, 3, 4];
-const STATUS_OPTIONS = ['open', 'in_progress', 'blocked', 'deferred'];
+const STATUS_OPTIONS = ['open', 'in_progress', 'blocked', 'deferred', 'closed'];
 
 export function QueueToolbar({
   lens, onLensChange, groupBy, onGroupByChange, filters, onFiltersChange, totalCount, filteredCount,

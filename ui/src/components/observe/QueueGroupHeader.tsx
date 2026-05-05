@@ -13,6 +13,9 @@ export function QueueGroupHeader({ label, count }: Props) {
       background: 'var(--bg-2)',
       borderBottom: '1px solid var(--rule-2)',
       borderTop: '1px solid var(--rule-2)',
+      position: 'sticky',
+      top: 0,
+      zIndex: 1,
     }}>
       <span style={{
         fontFamily: 'var(--font-mono)',

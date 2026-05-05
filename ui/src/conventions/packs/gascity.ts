@@ -241,10 +241,14 @@ async function getMoleculeEvents(
   rootId: string,
   { driver, workspace, signal }: PackContext,
 ): Promise<MoleculeEvent[]> {
-  const root = await driver.fetch<Bead>(['show', rootId, '--json'], { workspace, signal });
+  const rootResult = await driver.fetch<Bead | Bead[]>(['show', rootId], { workspace, signal });
+  const root = Array.isArray(rootResult) ? rootResult[0] : rootResult;
   const childIds = (root.dependencies ?? []).map(d => d.id);
   const children = await Promise.all(
-    childIds.map(cid => driver.fetch<Bead>(['show', cid, '--json'], { workspace, signal })),
+    childIds.map(async cid => {
+      const r = await driver.fetch<Bead | Bead[]>(['show', cid], { workspace, signal });
+      return Array.isArray(r) ? r[0] : r;
+    }),
   );
 
   const events: MoleculeEvent[] = [
@@ -260,7 +264,7 @@ async function getMoleculeEvents(
 
 async function listFleetItems({ driver, workspace, signal, prev }: PackContext): Promise<FleetItem[]> {
   const roots = await driver.fetch<Bead[]>(
-    ['list', '--type=molecule', '--status=in_progress', '--json'],
+    ['list', '--type=molecule', '--status=in_progress'],
     { workspace, signal },
   );
 
@@ -271,10 +275,14 @@ async function listFleetItems({ driver, workspace, signal, prev }: PackContext):
     if (cached && cached.updatedAt === (root.updated_at ?? '')) return cached;
 
     try {
-      const full = await driver.fetch<Bead>(['show', root.id, '--json'], { signal });
+      const fullResult = await driver.fetch<Bead | Bead[]>(['show', root.id], { signal });
+      const full = Array.isArray(fullResult) ? fullResult[0] : fullResult;
       const childIds = (full.dependencies ?? []).map(d => d.id);
       const children = await Promise.all(
-        childIds.map(cid => driver.fetch<Bead>(['show', cid, '--json'], { signal })),
+        childIds.map(async cid => {
+          const r = await driver.fetch<Bead | Bead[]>(['show', cid], { signal });
+          return Array.isArray(r) ? r[0] : r;
+        }),
       );
       return toFleetItem(full, computeAgg(full, children));
     } catch {

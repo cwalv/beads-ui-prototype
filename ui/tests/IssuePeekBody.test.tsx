@@ -79,11 +79,11 @@ describe('IssuePeekBody', () => {
     expect(screen.getByText('fo-dep-1')).toBeTruthy();
   });
 
-  it('shows Comments tab content when clicked', async () => {
+  it('renders comments inline in the Overview', async () => {
     renderInRouter(<IssuePeekBody beadId="fo-test-1" onClose={vi.fn()} />);
     await waitFor(() => expect(screen.queryByText('Test Bead')).toBeTruthy());
 
-    fireEvent.click(screen.getByText('Comments'));
+    // Comments inline-render under the Overview body (Obs 19); no tab click.
     expect(screen.getByText('Hello world')).toBeTruthy();
   });
 

@@ -99,7 +99,8 @@ export function TopChrome({ onOpenPalette }: Props) {
 
         <button
           className={`doc-mode-btn${docMode ? ' active' : ''}`}
-          title={docMode ? 'Exit doc mode (?)' : 'Toggle doc mode (?)'}
+          title={docMode ? 'Hide inline help (?)' : 'Show inline help (?) — pins all hint popovers open'}
+          aria-label={docMode ? 'Hide inline help' : 'Show inline help'}
           onClick={toggleDocMode}
           aria-pressed={docMode}
         >
