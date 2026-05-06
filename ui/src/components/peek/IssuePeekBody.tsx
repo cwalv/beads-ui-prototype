@@ -415,9 +415,9 @@ export function IssuePeekBody({ beadId, workspace, onClose: _onClose, onNodePatc
             {tab}
           </button>
         ))}
-        {activeTab === 'Overview' && (
+        {activeTab === 'Overview' && !editMode && (
           <button
-            onClick={editMode ? handleSave : startEdit}
+            onClick={startEdit}
             style={{
               marginLeft: 'auto',
               marginRight: 8,
@@ -425,13 +425,46 @@ export function IssuePeekBody({ beadId, workspace, onClose: _onClose, onNodePatc
               padding: '3px 10px',
               border: '1px solid var(--rule)',
               borderRadius: 2,
-              background: editMode ? 'var(--accent)' : 'var(--bg)',
-              color: editMode ? '#fff' : 'var(--ink-2)',
+              background: 'var(--bg)',
+              color: 'var(--ink-2)',
               cursor: 'pointer',
             }}
           >
-            {editMode ? 'Save' : 'Edit'}
+            Edit
           </button>
+        )}
+        {activeTab === 'Overview' && editMode && (
+          <div style={{ marginLeft: 'auto', marginRight: 8, display: 'flex', gap: 6 }}>
+            <button
+              onClick={() => { setEditMode(false); setSaveError(null); }}
+              title="Discard pending edits"
+              style={{
+                fontSize: 11,
+                padding: '3px 10px',
+                border: '1px solid var(--rule)',
+                borderRadius: 2,
+                background: 'var(--bg)',
+                color: 'var(--ink-2)',
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              style={{
+                fontSize: 11,
+                padding: '3px 10px',
+                border: '1px solid var(--accent)',
+                borderRadius: 2,
+                background: 'var(--accent)',
+                color: '#fff',
+                cursor: 'pointer',
+              }}
+            >
+              Save
+            </button>
+          </div>
         )}
       </div>
 
