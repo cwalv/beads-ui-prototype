@@ -1,4 +1,20 @@
-/* Design tokens — ported from prototype-v1/wireframe-styles.css */
+/* Design tokens — ported from prototype-v1/wireframe-styles.css
+ *
+ * Theming model (Decision 4 — phase-1):
+ *   - :root holds the LIGHT palette (default).
+ *   - :root[data-theme="dark"] forces dark; :root[data-theme="light"] forces
+ *     light; absence of data-theme means "auto" (follow OS preference).
+ *   - The @media block applies dark when the OS prefers dark AND the user
+ *     hasn't pinned light. Pinned dark (data-theme="dark") wins regardless.
+ *
+ * The dark values are duplicated between the explicit selector and the
+ * @media block on purpose — CSS does not allow combining a selector and a
+ * media query in a single rule. ~20 tokens; fine. If the list grows or
+ * tokens accumulate variants per surface, revisit (e.g. light-dark()).
+ *
+ * Hardcoded literals outside this file are phase-2 cleanup scope —
+ * see fo-x00u4.5 (phase-1 scope) and the phase-2 follow-up bead.
+ */
 :root {
   --ink: #14171a;
   --ink-2: #2d3238;
@@ -21,6 +37,50 @@
 
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+:root[data-theme="dark"] {
+  --ink: #e7e9ec;
+  --ink-2: #c5c9ce;
+  --ink-3: #9aa0a8;
+  --mute: #6e747c;
+  --mute-2: #4d525a;
+  --rule: #2c3138;
+  --rule-2: #232830;
+  --bg: #14171a;
+  --bg-2: #1c2024;
+  --bg-3: #252a30;
+  --accent: #5b8fff;
+  --accent-soft: #1c2a48;
+  --warn: #e0a05a;
+  --warn-soft: #3a2a14;
+  --ok: #5cb681;
+  --ok-soft: #14301f;
+  --danger: #e07070;
+  --danger-soft: #3a1f1f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #e7e9ec;
+    --ink-2: #c5c9ce;
+    --ink-3: #9aa0a8;
+    --mute: #6e747c;
+    --mute-2: #4d525a;
+    --rule: #2c3138;
+    --rule-2: #232830;
+    --bg: #14171a;
+    --bg-2: #1c2024;
+    --bg-3: #252a30;
+    --accent: #5b8fff;
+    --accent-soft: #1c2a48;
+    --warn: #e0a05a;
+    --warn-soft: #3a2a14;
+    --ok: #5cb681;
+    --ok-soft: #14301f;
+    --danger: #e07070;
+    --danger-soft: #3a1f1f;
+  }
 }
 
 *, *::before, *::after { box-sizing: border-box; }

@@ -7,6 +7,19 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <script>
+      // FOUC prevention — read the persisted theme before React mounts so a
+      // dark-mode reload doesn't flash light first. Mirrors the storage key
+      // and "auto" semantics in ui/src/hooks/useTheme.tsx; keep in sync.
+      (function () {
+        try {
+          var t = localStorage.getItem('beads-ui.theme');
+          if (t === 'dark' || t === 'light') {
+            document.documentElement.setAttribute('data-theme', t);
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

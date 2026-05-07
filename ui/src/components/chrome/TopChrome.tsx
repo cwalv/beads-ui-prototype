@@ -5,6 +5,7 @@ import { useDocMode } from '../../hooks/useDocMode';
 import { DirtyContext } from '../../hooks/useSetDirty';
 import { WorkspaceContext } from '../../hooks/useWorkspace';
 import { WorkspaceSwitcher } from '../switcher/WorkspaceSwitcher';
+import { ThemeSwitcher } from './ThemeSwitcher';
 import type { Destination } from '../../types';
 
 const DESTS: { id: Destination; label: string; hint: string }[] = [
@@ -63,6 +64,8 @@ export function TopChrome({ onOpenPalette }: Props) {
           )}
           <span className="ws-caret">{switcherOpen ? '▴' : '▾'}</span>
         </div>
+
+        <ThemeSwitcher />
 
         <nav className="dest-tabs">
           {DESTS.map(d => {
