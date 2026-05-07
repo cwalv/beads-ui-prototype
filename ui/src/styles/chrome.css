@@ -97,6 +97,41 @@
   background: var(--warn);
 }
 
+/* Theme switcher — three-state segmented control (auto / light / dark).
+   Sits next to .ws-pill in the topbar; same height, same border treatment. */
+.theme-switcher {
+  display: inline-flex;
+  align-items: stretch;
+  height: 26px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.theme-switcher .theme-opt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  padding: 0;
+  border: none;
+  border-right: 1px solid var(--rule-2);
+  background: transparent;
+  color: var(--mute);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 80ms, background 80ms;
+}
+
+.theme-switcher .theme-opt:last-child { border-right: none; }
+.theme-switcher .theme-opt:hover { color: var(--ink-2); }
+.theme-switcher .theme-opt.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 /* Destination tabs */
 .dest-tabs {
   display: flex;

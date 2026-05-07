@@ -10,6 +10,7 @@ import { ErrorBoundary } from './components/errors/ErrorBoundary';
 import { WorkspaceContext } from './hooks/useWorkspace';
 import { FooterContext } from './hooks/useSetFooter';
 import { DirtyContext } from './hooks/useSetDirty';
+import { ThemeProvider } from './hooks/useTheme';
 import { fetchWorkspaces } from './client/workspaces';
 import type { Workspace } from './types';
 import type { FooterContent } from './hooks/useSetFooter';
@@ -166,10 +167,12 @@ function AppShell() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AppProviders>
-        <AppShell />
-      </AppProviders>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AppProviders>
+          <AppShell />
+        </AppProviders>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
