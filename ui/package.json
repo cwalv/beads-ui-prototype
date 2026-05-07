@@ -25,6 +25,8 @@
   "dependencies": {
     "@bufbuild/protobuf": "^2.2.0",
     "@panzoom/panzoom": "^4.6.2",
+    "@tanstack/react-query": "^5.100.0",
+    "@tanstack/react-query-devtools": "^5.100.0",
     "@types/dagre": "^0.7.54",
     "dagre": "^0.8.5",
     "marked": "^18.0.2",

@@ -1,7 +1,9 @@
-import { Suspense, lazy, useState, useCallback, useEffect } from 'react';
+import { Suspense, lazy, useState, useCallback, useEffect, useRef } from 'react';
 import './styles/learn.css';
 import { BrowserRouter, Routes, Route, Navigate, useSearchParams, useLocation } from 'react-router-dom';
 import type { Location } from 'react-router-dom';
+import { QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { TopChrome } from './components/chrome/TopChrome';
 import { FootBar } from './components/chrome/FootBar';
 import { CommandPalette } from './components/palette/CommandPalette';
@@ -11,6 +13,7 @@ import { WorkspaceContext } from './hooks/useWorkspace';
 import { FooterContext } from './hooks/useSetFooter';
 import { DirtyContext } from './hooks/useSetDirty';
 import { fetchWorkspaces } from './client/workspaces';
+import { queryClient } from './lib/queryClient';
 import type { Workspace } from './types';
 import type { FooterContent } from './hooks/useSetFooter';
 
@@ -34,42 +37,44 @@ const STUB_URL = import.meta.env.VITE_BD_SERVER_URL as string | undefined;
 function AppProviders({ children }: { children: React.ReactNode }) {
   const [searchParams] = useSearchParams();
 
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const {
+    data: workspacesData,
+    error: queryError,
+    isLoading: loading,
+    refetch,
+  } = useQuery({
+    queryKey: ['workspaces'],
+    queryFn: fetchWorkspaces,
+  });
+  const workspaces = workspacesData ?? [];
+  const error = queryError ? (queryError instanceof Error ? queryError.message : 'Failed to load workspaces') : null;
+
   const [current, setCurrent_] = useState<Workspace | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [isConsolidated, setConsolidated] = useState(false);
   const [footer, setFooter] = useState<FooterContent>({ left: '', right: '' });
   const [dirty, setDirty] = useState(false);
 
   const isStub = !STUB_URL;
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const ws = await fetchWorkspaces();
-      setWorkspaces(ws);
+  // One-shot initial selection from URL → localStorage → first workspace.
+  // Reset by retry() so a successful refetch after error re-runs selection.
+  const initializedRef = useRef(false);
+  useEffect(() => {
+    if (initializedRef.current || workspacesData === undefined || workspacesData.length === 0) return;
+    initializedRef.current = true;
 
-      const paramWs = searchParams.get('ws');
-      const savedWs = localStorage.getItem('beads-ui.lastWorkspace');
-      const initial = ws.find(w => w.name === paramWs)
-        ?? ws.find(w => w.name === savedWs)
-        ?? ws[0]
-        ?? null;
-      setCurrent_(initial);
-      // Persist the resolved workspace so reload doesn't re-run the
-      // paramWs/savedWs/ws[0] lottery if the server returns workspaces
-      // in a different order or paramWs doesn't match a real name.
-      if (initial) localStorage.setItem('beads-ui.lastWorkspace', initial.name);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load workspaces');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+    const paramWs = searchParams.get('ws');
+    const savedWs = localStorage.getItem('beads-ui.lastWorkspace');
+    const initial = workspacesData.find(w => w.name === paramWs)
+      ?? workspacesData.find(w => w.name === savedWs)
+      ?? workspacesData[0]
+      ?? null;
+    setCurrent_(initial);
+    // Persist the resolved workspace so reload doesn't re-run the
+    // paramWs/savedWs/ws[0] lottery if the server returns workspaces
+    // in a different order or paramWs doesn't match a real name.
+    if (initial) localStorage.setItem('beads-ui.lastWorkspace', initial.name);
+  }, [workspacesData, searchParams]);
 
   const setCurrent = useCallback((name: string) => {
     const ws = workspaces.find(w => w.name === name) ?? null;
@@ -77,10 +82,15 @@ function AppProviders({ children }: { children: React.ReactNode }) {
     if (ws) localStorage.setItem('beads-ui.lastWorkspace', ws.name);
   }, [workspaces]);
 
+  const retry = useCallback(() => {
+    initializedRef.current = false;
+    refetch();
+  }, [refetch]);
+
   return (
     <WorkspaceContext.Provider value={{
       workspaces, current, loading, error, isStub, isConsolidated,
-      setCurrent, setConsolidated, retry: load,
+      setCurrent, setConsolidated, retry,
     }}>
       <FooterContext.Provider value={{ content: footer, setContent: setFooter }}>
         <DirtyContext.Provider value={{ dirty, setDirty }}>
@@ -166,10 +176,13 @@ function AppShell() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AppProviders>
-        <AppShell />
-      </AppProviders>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AppProviders>
+          <AppShell />
+        </AppProviders>
+      </BrowserRouter>
+      {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+    </QueryClientProvider>
   );
 }
