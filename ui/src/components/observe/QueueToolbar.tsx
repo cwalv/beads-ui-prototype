@@ -104,7 +104,7 @@ export function QueueToolbar({
                 border: 'none',
                 borderLeft: i === 0 ? 'none' : '1px solid var(--rule)',
                 background: lens === opt.id ? 'var(--ink)' : 'var(--bg)',
-                color: lens === opt.id ? '#fff' : 'var(--ink-2)',
+                color: lens === opt.id ? 'var(--on-strong)' : 'var(--ink-2)',
                 cursor: 'pointer',
                 fontWeight: lens === opt.id ? 600 : 400,
               }}
@@ -210,7 +210,7 @@ export function QueueToolbar({
                 borderColor: groupBy === g ? 'var(--ink)' : 'var(--rule)',
                 borderRadius: 2,
                 background: groupBy === g ? 'var(--ink)' : 'var(--bg)',
-                color: groupBy === g ? '#fff' : 'var(--mute)',
+                color: groupBy === g ? 'var(--on-strong)' : 'var(--mute)',
                 cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
               }}

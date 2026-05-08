@@ -124,7 +124,7 @@
 }
 
 .hint-dot:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-.hint-dot--pinned { background: var(--accent); border-color: var(--accent); color: #fff; }
+.hint-dot--pinned { background: var(--accent); border-color: var(--accent); color: var(--on-strong); }
 .hint-dot:focus { outline: none; border-color: var(--accent); }
 
 /* ══ Popover ═════════════════════════════════════════════════════════════════ */
@@ -413,5 +413,5 @@
 }
 .doc-mode-btn:hover { border-color: var(--mute); color: var(--ink); }
 .doc-mode-btn.active {
-  background: var(--accent); border-color: var(--accent); color: #fff;
+  background: var(--accent); border-color: var(--accent); color: var(--on-strong);
 }

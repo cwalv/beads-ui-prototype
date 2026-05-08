@@ -77,7 +77,7 @@ export function FleetSummary({ molecules, groupBy, onGroupByChange }: Props) {
               borderColor: groupBy === g ? 'var(--ink)' : 'var(--rule)',
               borderRadius: 2,
               background: groupBy === g ? 'var(--ink)' : 'var(--bg)',
-              color: groupBy === g ? '#fff' : 'var(--mute)',
+              color: groupBy === g ? 'var(--on-strong)' : 'var(--mute)',
               cursor: 'pointer',
               fontFamily: 'var(--font-mono)',
             }}
