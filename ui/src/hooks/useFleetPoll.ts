@@ -1,13 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { listLiveMolecules, type FleetMolecule, type WorkspaceError } from '../client/fleet';
+import { getActivePack } from '../conventions';
 
-const DEFAULT_INTERVAL_MS =
-  Number(import.meta.env.VITE_FLEET_POLL_INTERVAL_MS) ||
-  Number(localStorage.getItem('beads-ui.fleet.pollIntervalMs')) ||
-  3000;
-
-const HIDDEN_INTERVAL_MS = 10_000;
-const BACKOFF_STEPS = [3_000, 6_000, 12_000, 30_000];
+const FLEET_POLL_INTERVAL_MS = 3000;
 
 export type PauseReason = 'tab-hidden' | 'error-backoff' | null;
 
@@ -21,100 +17,50 @@ export interface FleetPollState {
   workspaceErrors: WorkspaceError[];
 }
 
-export function useFleetPoll(workspaceNames: string[]) {
-  const [state, setState] = useState<FleetPollState>({
-    molecules: [],
-    loading: true,
-    error: null,
-    lastTickAt: null,
-    pauseReason: null,
-    retryIn: null,
-    workspaceErrors: [],
+function useDocumentHidden(): boolean {
+  const [hidden, setHidden] = useState(() =>
+    typeof document !== 'undefined' && document.hidden,
+  );
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const onChange = () => setHidden(document.hidden);
+    document.addEventListener('visibilitychange', onChange);
+    return () => document.removeEventListener('visibilitychange', onChange);
+  }, []);
+  return hidden;
+}
+
+export function useFleetPoll(workspaceNames: string[]): FleetPollState {
+  const isHidden = useDocumentHidden();
+  const packName = getActivePack().name;
+
+  const query = useQuery({
+    queryKey: ['fleet', workspaceNames, packName] as const,
+    queryFn: ({ signal }) => listLiveMolecules(workspaceNames, [], signal),
+    enabled: workspaceNames.length > 0,
+    refetchInterval: FLEET_POLL_INTERVAL_MS,
   });
 
-  const moleculesRef = useRef<FleetMolecule[]>([]);
-  const inFlightRef = useRef(false);
-  const backoffIdxRef = useRef(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const wsNamesRef = useRef(workspaceNames);
-  wsNamesRef.current = workspaceNames;
+  const error = query.error
+    ? query.error instanceof Error ? query.error.message : String(query.error)
+    : null;
 
-  const scheduleTick = useCallback((delayMs: number) => {
-    if (timerRef.current !== null) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => tick(), delayMs);
-  }, []);
+  let pauseReason: PauseReason = null;
+  let retryIn: number | null = null;
+  if (isHidden) {
+    pauseReason = 'tab-hidden';
+  } else if (error && query.fetchStatus === 'idle') {
+    pauseReason = 'error-backoff';
+    retryIn = Math.round(FLEET_POLL_INTERVAL_MS / 1000);
+  }
 
-  const tick = useCallback(async () => {
-    if (inFlightRef.current) return;
-    if (!wsNamesRef.current.length) return;
-
-    inFlightRef.current = true;
-    const controller = new AbortController();
-    try {
-      const { molecules, workspaceErrors } = await listLiveMolecules(
-        wsNamesRef.current,
-        moleculesRef.current,
-        controller.signal,
-      );
-      moleculesRef.current = molecules;
-      backoffIdxRef.current = 0;
-      setState(s => ({
-        ...s,
-        molecules,
-        loading: false,
-        error: null,
-        lastTickAt: Date.now(),
-        pauseReason: document.hidden ? 'tab-hidden' : null,
-        retryIn: null,
-        workspaceErrors,
-      }));
-      scheduleTick(
-        document.hidden ? HIDDEN_INTERVAL_MS : DEFAULT_INTERVAL_MS,
-      );
-    } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') return;
-      const idx = Math.min(backoffIdxRef.current, BACKOFF_STEPS.length - 1);
-      const delay = BACKOFF_STEPS[idx];
-      backoffIdxRef.current = Math.min(backoffIdxRef.current + 1, BACKOFF_STEPS.length - 1);
-      const msg = e instanceof Error ? e.message : String(e);
-      setState(s => ({
-        ...s,
-        loading: false,
-        error: msg,
-        pauseReason: 'error-backoff',
-        retryIn: Math.round(delay / 1000),
-      }));
-      scheduleTick(delay);
-    } finally {
-      inFlightRef.current = false;
-    }
-  }, [scheduleTick]);
-
-  // Visibility gating: slow-poll on hidden (HIDDEN_INTERVAL_MS), fire immediately on visible
-  // Note: don't fully pause — viewing through tool windows (browser extension, IDE preview)
-  // reports document.hidden=true even when the user is actively looking at the tab.
-  useEffect(() => {
-    function onVisibility() {
-      if (!document.hidden) {
-        setState(s => ({ ...s, pauseReason: null }));
-        tick();
-      } else {
-        setState(s => ({ ...s, pauseReason: 'tab-hidden' }));
-        // don't clear timer — let the next scheduled tick fire on its slower cadence
-      }
-    }
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [tick]);
-
-  // Start polling on mount; cancel on unmount
-  useEffect(() => {
-    tick();
-    return () => {
-      if (timerRef.current !== null) clearTimeout(timerRef.current);
-      timerRef.current = null;
-    };
-  }, [tick]);
-
-  return state;
+  return {
+    molecules: query.data?.molecules ?? [],
+    loading: query.isLoading,
+    error,
+    lastTickAt: query.dataUpdatedAt > 0 ? query.dataUpdatedAt : null,
+    pauseReason,
+    retryIn,
+    workspaceErrors: query.data?.workspaceErrors ?? [],
+  };
 }
