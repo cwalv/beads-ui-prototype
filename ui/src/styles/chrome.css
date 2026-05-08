@@ -172,8 +172,8 @@
   letter-spacing: 0.02em;
 }
 
-.dest-tab.active .dest-lbl { color: #fff; }
-.dest-tab.active .dest-hint { color: rgba(255,255,255,0.55); }
+.dest-tab.active .dest-lbl { color: var(--on-strong); }
+.dest-tab.active .dest-hint { color: color-mix(in srgb, var(--on-strong) 55%, transparent); }
 
 /* Breadcrumb in chrome */
 .top-chrome .breadcrumb {
@@ -361,7 +361,7 @@
   line-height: 1;
 }
 .st-open     { color: var(--mute); }
-.st-prog     { color: #b8892b; }
+.st-prog     { color: var(--warn); }
 .st-blocked  { color: var(--danger); }
 .st-closed   { color: var(--mute-2); }
 .st-deferred { color: var(--accent); }
@@ -455,7 +455,7 @@
   left: 1px;
   width: 10px;
   height: 10px;
-  background: #fff;
+  background: var(--on-strong);
   border-radius: 50%;
   transition: left 0.15s;
 }
