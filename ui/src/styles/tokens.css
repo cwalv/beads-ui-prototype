@@ -12,8 +12,22 @@
  * media query in a single rule. ~20 tokens; fine. If the list grows or
  * tokens accumulate variants per surface, revisit (e.g. light-dark()).
  *
- * Hardcoded literals outside this file are phase-2 cleanup scope —
- * see fo-x00u4.5 (phase-1 scope) and the phase-2 follow-up bead.
+ * Phase-2 token decisions (fo-oqy92):
+ *   - --on-strong: foreground (text/icon) color when sitting on a strong
+ *     surface — var(--ink), var(--accent), var(--warn), var(--danger),
+ *     priority pills, etc. Was hardcoded `#fff` everywhere; that breaks
+ *     in dark mode where var(--ink) is a light color. The token flips:
+ *     near-white in light, near-black in dark. (Values match --bg today
+ *     by construction; the named token signals semantic intent.)
+ *   - --scrim: modal/overlay backdrop. Slightly stronger in dark mode
+ *     because a dark scrim over a dark page needs more alpha to read.
+ *   - .st-prog (in-progress status): folded into var(--warn) rather
+ *     than introducing a separate gold accent — phase-1 had #b8892b,
+ *     close enough to warn that a separate token isn't justified.
+ *
+ * Out-of-scope (phase-3): syntax highlighting (.t-key/.t-str etc.),
+ * doc code blocks, GROUP_PALETTE/workspace PALETTE in TS, neutral drop
+ * shadows, lint enforcement. Tracked in the phase-3 follow-up bead.
  */
 :root {
   --ink: #14171a;
@@ -34,6 +48,8 @@
   --ok-soft: #dfeee4;
   --danger: #b23a3a;
   --danger-soft: #f3dada;
+  --on-strong: #ffffff;
+  --scrim: rgba(0, 0, 0, 0.35);
 
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -58,6 +74,8 @@
   --ok-soft: #14301f;
   --danger: #e07070;
   --danger-soft: #3a1f1f;
+  --on-strong: #14171a;
+  --scrim: rgba(0, 0, 0, 0.55);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -80,6 +98,8 @@
     --ok-soft: #14301f;
     --danger: #e07070;
     --danger-soft: #3a1f1f;
+    --on-strong: #14171a;
+    --scrim: rgba(0, 0, 0, 0.55);
   }
 }
 
