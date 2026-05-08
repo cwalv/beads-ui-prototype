@@ -125,7 +125,7 @@ export function QueueRow({ bead, workspace, showWorkspace, claimable, onClaim, o
         <span style={{
           fontFamily: 'var(--font-mono)',
           fontSize: 10,
-          color: '#fff',
+          color: 'var(--on-strong)',
           background: priorityTone(bead.priority),
           padding: '1px 5px',
           borderRadius: 2,

@@ -458,7 +458,7 @@ export function IssuePeekBody({ beadId, workspace, onClose: _onClose, onNodePatc
                 border: '1px solid var(--accent)',
                 borderRadius: 2,
                 background: 'var(--accent)',
-                color: '#fff',
+                color: 'var(--on-strong)',
                 cursor: 'pointer',
               }}
             >

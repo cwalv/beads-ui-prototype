@@ -213,7 +213,7 @@ export default function Capture() {
           data-testid="create-bead-btn"
           style={{
             border: '1px solid var(--accent)', borderRadius: 2, background: 'var(--accent)',
-            padding: '4px 14px', fontSize: 11.5, color: '#fff',
+            padding: '4px 14px', fontSize: 11.5, color: 'var(--on-strong)',
             cursor: canSubmit ? 'pointer' : 'default', fontFamily: 'var(--font-sans)',
             opacity: canSubmit ? 1 : 0.55,
           }}
@@ -381,7 +381,7 @@ export default function Capture() {
                     style={{
                       cursor: 'pointer',
                       ...(newDepType === dt
-                        ? { background: 'var(--ink)', color: '#fff', borderColor: 'var(--ink)' }
+                        ? { background: 'var(--ink)', color: 'var(--on-strong)', borderColor: 'var(--ink)' }
                         : {}),
                     }}
                   >
@@ -461,7 +461,7 @@ export default function Capture() {
                 onClick={() => setType(t)}
                 style={{
                   cursor: 'pointer',
-                  ...(type === t ? { background: 'var(--ink)', color: '#fff', borderColor: 'var(--ink)' } : {}),
+                  ...(type === t ? { background: 'var(--ink)', color: 'var(--on-strong)', borderColor: 'var(--ink)' } : {}),
                 }}
               >
                 {t}
@@ -479,7 +479,7 @@ export default function Capture() {
                 style={{
                   cursor: 'pointer',
                   fontFamily: 'var(--font-mono)',
-                  ...(priority === p ? { background: 'var(--ink)', color: '#fff', borderColor: 'var(--ink)' } : {}),
+                  ...(priority === p ? { background: 'var(--ink)', color: 'var(--on-strong)', borderColor: 'var(--ink)' } : {}),
                 }}
               >P{p}</span>
             ))}
@@ -559,7 +559,7 @@ export default function Capture() {
       {epicDialogOpen && (
         <div
           style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+            position: 'fixed', inset: 0, background: 'var(--scrim)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
           }}
           onClick={() => setEpicDialogOpen(false)}
