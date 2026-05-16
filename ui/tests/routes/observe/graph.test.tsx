@@ -11,6 +11,8 @@ vi.mock('@panzoom/panzoom', () => ({
     zoomWithWheel: vi.fn(),
     zoom: vi.fn(),
     pan: vi.fn(),
+    getScale: vi.fn(() => 1),
+    zoomToPoint: vi.fn(),
   }),
 }));
 
