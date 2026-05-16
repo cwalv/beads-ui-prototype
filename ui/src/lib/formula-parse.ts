@@ -147,7 +147,14 @@ export function parseFormula(src: string): ParsedFormula {
         if (stepRanges[stepIdx]) stepRanges[stepIdx].id = String(parsedVal);
       }
       if (key === 'title') s.title = String(parsedVal);
-      if (key === 'needs' && Array.isArray(parsedVal)) s.needs = parsedVal.map(String);
+      // `needs` and `depends_on` are peer aliases in bd (see
+      // beads/internal/formula/types.go:220 — both are declared on the
+      // Step struct and merged at cook time). Concat + dedupe so a
+      // formula that uses either or both forms works the same way.
+      if ((key === 'needs' || key === 'depends_on') && Array.isArray(parsedVal)) {
+        const deps = parsedVal.map(String);
+        s.needs = [...new Set([...s.needs, ...deps])];
+      }
       if (key === 'metadata' && typeof parsedVal === 'object' && parsedVal !== null) s.metadata = parsedVal as Record<string, unknown>;
     } else if (ctx.endsWith('.retry')) {
       const s = steps[stepIdx];

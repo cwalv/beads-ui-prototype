@@ -92,6 +92,26 @@ describe('parseFormula — edge cases', () => {
     expect(steps[0].id).toBe('s1');
     expect(errors).toHaveLength(0);
   });
+
+  it('parses depends_on as a peer alias of needs', () => {
+    const src = `\n[[steps]]\nid = "a"\ntitle = "A"\n\n[[steps]]\nid = "b"\ntitle = "B"\ndepends_on = ["a"]\n`;
+    const { steps, errors } = parseFormula(src);
+    expect(steps[1].needs).toEqual(['a']);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('merges needs and depends_on with dedupe', () => {
+    const src = `\n[[steps]]\nid = "a"\ntitle = "A"\n\n[[steps]]\nid = "b"\ntitle = "B"\n\n[[steps]]\nid = "c"\ntitle = "C"\nneeds = ["a", "b"]\ndepends_on = ["b"]\n`;
+    const { steps, errors } = parseFormula(src);
+    expect(steps[2].needs).toEqual(['a', 'b']);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('reports error for unknown depends_on reference', () => {
+    const src = `\n[[steps]]\nid = "a"\ntitle = "A"\n\n[[steps]]\nid = "b"\ntitle = "B"\ndepends_on = ["nonexistent"]\n`;
+    const { errors } = parseFormula(src);
+    expect(errors.some(e => e.msg.includes('needs unknown'))).toBe(true);
+  });
 });
 
 describe('parseValue', () => {
