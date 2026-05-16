@@ -1,8 +1,9 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { layoutDAG, edgePath } from '../../lib/dag-layout';
 import type { Step, ParseError } from '../../lib/formula-parse';
 import type { DAGLayout } from '../../lib/dag-layout';
 import { useDagOverrides } from '../../hooks/useDagOverrides';
+import { useSmoothZoom } from '../../hooks/useSmoothZoom';
 import { HintDot } from '../ui/HintDot';
 import { getActivePack } from '../../conventions';
 import type { Badge } from '../../conventions';
@@ -61,30 +62,36 @@ export function DAG({ formulaName, steps, layout, selected, onSelect, errors }: 
     return result;
   }, [layout.nodes, overrides]);
 
-  // Wheel = zoom centered on cursor (slippy-map style). preventDefault stops the
-  // page from scrolling under the canvas.
-  useEffect(() => {
-    const el = canvasRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
+  // Wheel = zoom centered on cursor (slippy-map style). The smooth-zoom
+  // hook owns the wheel handling and rAF catch-up; we provide just the
+  // pan-to-keep-cursor math via applyScale + focus state captured at
+  // each wheel event.
+  const focusRef = useRef<{ gx: number; gy: number; cx: number; cy: number } | null>(null);
+
+  useSmoothZoom(canvasRef, {
+    minScale: MIN_ZOOM,
+    maxScale: MAX_ZOOM,
+    getScale: () => tRef.current.zoom,
+    onWheelEvent: (event) => {
+      const el = canvasRef.current;
+      if (!el) return;
       const rect = el.getBoundingClientRect();
-      const cx = e.clientX - rect.left;
-      const cy = e.clientY - rect.top;
+      const cx = event.clientX - rect.left;
+      const cy = event.clientY - rect.top;
       const cur = tRef.current;
-      const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
-      const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, cur.zoom * factor));
-      // graph point under cursor before zoom
-      const gx = (cx - cur.panX) / cur.zoom;
-      const gy = (cy - cur.panY) / cur.zoom;
-      // pan such that (gx, gy) stays under the cursor at the new zoom
-      const newPanX = cx - gx * newZoom;
-      const newPanY = cy - gy * newZoom;
-      setT({ zoom: newZoom, panX: newPanX, panY: newPanY });
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, []);
+      focusRef.current = {
+        gx: (cx - cur.panX) / cur.zoom,
+        gy: (cy - cur.panY) / cur.zoom,
+        cx,
+        cy,
+      };
+    },
+    applyScale: (zoom) => {
+      const f = focusRef.current;
+      if (!f) return;
+      setT({ zoom, panX: f.cx - f.gx * zoom, panY: f.cy - f.gy * zoom });
+    },
+  });
 
   // Mousedown on empty canvas = pan drag. Mousedown on a node falls through
   // to the node's own onClick.

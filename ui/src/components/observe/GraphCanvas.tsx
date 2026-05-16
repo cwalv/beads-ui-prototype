@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react';
 import Panzoom from '@panzoom/panzoom';
 import type { MoleculeGraph, LayoutNode } from '../../types';
 import { GraphNode } from './GraphNode';
+import { useSmoothZoom } from '../../hooks/useSmoothZoom';
+
+type PanzoomInstance = ReturnType<typeof Panzoom>;
 
 interface Props {
   graph: MoleculeGraph;
@@ -32,24 +35,42 @@ function groupBounds(nodes: LayoutNode[]) {
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
+const MIN_SCALE = 0.3;
+const MAX_SCALE = 3;
+
 export function GraphCanvas({ graph, selectedId, onNodeClick }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const pzRef = useRef<PanzoomInstance | null>(null);
+  const lastPointRef = useRef<{ clientX: number; clientY: number } | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
     const pz = Panzoom(containerRef.current, {
-      maxScale: 3,
-      minScale: 0.3,
+      maxScale: MAX_SCALE,
+      minScale: MIN_SCALE,
       contain: 'outside',
     });
-    const parent = containerRef.current.parentElement;
-    if (parent) parent.addEventListener('wheel', pz.zoomWithWheel);
+    pzRef.current = pz;
     return () => {
-      if (parent) parent.removeEventListener('wheel', pz.zoomWithWheel);
       pz.destroy();
+      pzRef.current = null;
     };
   }, []);
+
+  useSmoothZoom(wrapperRef, {
+    minScale: MIN_SCALE,
+    maxScale: MAX_SCALE,
+    getScale: () => pzRef.current?.getScale() ?? 1,
+    onWheelEvent: (event) => {
+      lastPointRef.current = { clientX: event.clientX, clientY: event.clientY };
+    },
+    applyScale: (scale) => {
+      const pz = pzRef.current;
+      const p = lastPointRef.current;
+      if (pz && p) pz.zoomToPoint(scale, p);
+    },
+  });
 
   const continuationGroups = new Map<string, LayoutNode[]>();
   for (const node of graph.nodes) {
