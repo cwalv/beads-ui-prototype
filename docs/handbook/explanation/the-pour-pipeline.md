@@ -279,19 +279,152 @@ be worth templating for reuse.
 
 ### Gascity
 
-- Has its own parallel formula compiler
-  (`gascity/internal/formula/`) that adds a `Contract` field
-  (`graph.v2` opts into graph-first semantics).
-- `gc sling --formula` invokes gascity's compiler + `molecule.Cook`.
-  Does NOT call `bd mol cook`.
-- Uses bd's `bd mol current` for runtime step tracking. Compile is
-  gascity; step tracking is beads.
-- Wisps are tied to `gc.continuation_group` metadata — a
-  continuation group pours a new wisp per iteration.
+Gascity carries a parallel formula compiler at
+`github/gastownhall/gascity/internal/formula/`. beads stays minimal so
+any orchestrator can wrap it; gascity layers graph-first semantics on
+top of beads's TOML format and bead-graph runtime. The sections below
+read gascity's compiler as evidence for what those semantics *cost* —
+the substrate is still beads.
 
-Format drift risk: gascity and beads both parse the TOML format, and
-gascity has been extending its schema independently. See
-[../../gaps-audit.md](../../gaps-audit.md) §A8 for the flag.
+#### Why a parallel compiler
+
+bd's compiler ignores `gc.*` step metadata; gascity's reads it and
+emits additional graph nodes. The metadata-driven keys that gascity
+treats as load-bearing are listed in
+`internal/formula/types.go:942-957` (`metadataRequiresGraphContract`):
+`gc.kind` values `scope`/`cleanup`/`scope-check`/`workflow-finalize`/
+`retry`/`retry-run`/`retry-eval`/`ralph`/`run`/`check`, plus
+`gc.scope_name`/`gc.scope_role`/`gc.scope_ref`/`gc.continuation_group`/
+`gc.on_fail`. Any of these forces an explicit `contract = "graph.v2"`
+declaration; legacy formulas without these keys still compile through
+bd's hierarchy-first path.
+
+Routing-side keys are read separately by the dispatcher:
+`gc.run_target` and `gc.routed_to` at
+`internal/dispatch/fanout.go:306-308`, with `gc.execution_routed_to`
+for control-bead split routing at `internal/graphroute/graphroute.go:19`.
+`gc.output_json_schema` is *declared* (e.g., `mol-review-quorum.toml:102`)
+and `gc.output_json_required` *is* checked for non-empty at
+`internal/dispatch/retry.go:235`, but the schema name itself is not
+validated against any registry — declaring a schema does not enforce it.
+
+#### The `Contract` field
+
+The opt-in is a single string on the formula root:
+`formula.Contract` at `internal/formula/types.go:78-80`. The only
+recognized value is `"graph.v2"` (`internal/formula/types.go:971`,
+`internal/formula/compile.go:518-520`). When set, the compiler emits
+graph-control beads — fanout, scope-check, workflow-finalize,
+retry, retry-eval — instead of a hierarchical molecule tree
+(`internal/formula/graph.go:35,70,108`). Without `graph.v2`, a formula
+that uses graph-only constructs (e.g., `[steps.retry]` blocks or any
+of the metadata keys listed above) is rejected at validate time
+(`internal/formula/types.go:974-976`). graph.v2 is also gated by a
+daemon-level toggle, `IsFormulaV2Enabled`
+(`internal/formula/compile.go:500-516`).
+
+#### Sling-attach vs pour
+
+Two entry points produce molecules. `bd pour` instantiates a proto
+exactly as compiled and does not stamp routing. `gc sling --formula`
+runs gascity's compiler and then *decorates* the recipe before
+instantiation: `internal/sling/sling.go:1095-1117` calls
+`ApplyGraphRouting`, which for graph.v2 recipes delegates to
+`DecorateGraphWorkflowRecipe`
+(`internal/graphroute/graphroute.go:398-472`). Decoration substitutes
+`{{var}}` placeholders in each step's `gc.run_target`, resolves the
+target to an agent, and stamps `gc.routed_to` on every non-root,
+non-topology step (`internal/graphroute/graphroute.go:137-149`); legacy
+recipes get a uniform stamp from `stampLegacyRecipeRouting`
+(`internal/graphroute/graphroute.go:533-551`). Production workflows
+that need per-step routing land via sling; `bd pour` is for tests and
+one-off runs that do not need routing decoration.
+
+#### Pools as routing targets
+
+`gc.routed_to` names an *agent config* — either an inline `[[agent]]`
+in `city.toml` or a pool-expanded variant — qualified as `rig/agent`.
+Sizing keys (`max_active_sessions`, `min_active_sessions` at
+`internal/config/config.go:1784-1787`) replace the older
+`[pool]` shape. Routing semantics are then implemented by the
+work-query script every session runs:
+`internal/config/config.go:2153-2185` (`EffectiveWorkQuery`) checks
+`bd ready --metadata-field gc.routed_to=<qualified-name> --unassigned`
+in tier 3, so a stamped step appears as queued work for any matching
+pool member. Because `gc.routed_to` is per-step, a single workflow can
+fan out across pools — for example, body steps routed to
+`foundations/worker` and a merge step routed to
+`foundations/refinery` — purely through the decoration pass; the
+beads-graph runtime is unaware that "routing" exists.
+
+#### Wisps and `gc.continuation_group`
+
+Continuation groups are gascity's *intended* session-affinity primitive:
+beads in the same group should be processed by the same live worker
+session so context is not re-paid. The mechanism is documented in the
+worker prompt at
+`internal/bootstrap/packs/core/assets/prompts/graph-worker.md:77-102`,
+which instructs a worker that claims a bead to look up its
+`gc.continuation_group` and pre-assign every open sibling in the same
+group to its own session — effectively a worker-driven implementation.
+
+As of 2026-05 the dispatcher does **not** enforce this contract: a
+worker in a different rig or workweave can still claim the next ready
+bead in the group, because no code in `internal/dispatch/` reads
+`gc.session_affinity`. The known gap is tracked in
+`fo-session-affinity-not-enforced`. Treat `gc.continuation_group` as
+guidance-with-cooperation, not a fence.
+
+#### The body / cleanup split
+
+`gc.kind` partitions a graph.v2 workflow into role-shaped steps:
+`body` work (members that do the job), `scope` (a latch bead wrapping
+body members until they all close), `cleanup` (teardown work, marked
+`gc.scope_role = "teardown"` so it is exempt from scope-check gating —
+`internal/dispatch/control.go:583-585`,
+`internal/formula/graph.go:121-122`), and a family of *control* kinds
+(`scope-check`, `fanout`, `workflow-finalize`, `retry`, `retry-eval`,
+`ralph`, `check`) that route to the implicit control-dispatcher session
+(`internal/graphroute/graphroute.go:55-62`). The split matters because
+a cleanup step can observe whether the body succeeded; the dispatcher
+treats teardown as "always execute when ready," which lets a formula
+say "tear down the workweave only on confirmed success" rather than
+entangling cleanup with the body's retry loop.
+
+#### Durable vs experimental (as of 2026-05)
+
+graph.v2 as a *full contract surface* is not yet load-bearing in
+production. The durable subset to build against is:
+
+- `bd pour` for ordinary workflows.
+- `gc sling --formula <target> <name>` for routed launches.
+- Named pools sized via `max_active_sessions` / `min_active_sessions`.
+- `foundations/refinery` for routine merges.
+- Wisps for SME / worker iteration, with `gc.continuation_group`
+  treated as a hint.
+- `mol-weave-work-sp` — the single-pool variant — compiles and runs
+  but pays a per-step session-spawn cost.
+
+Known gaps to design *around*, not on:
+
+- `gc.session_affinity = "require"` is unenforced
+  (`fo-session-affinity-not-enforced`).
+- Retry materialization drops body / routing metadata
+  (`fo-ybvmi`), so a retried attempt may need to re-derive context
+  the original carried.
+- `gc.output_json_schema` is declared but never validated against a
+  registry; only `gc.output_json_required` (existence) is checked
+  (`internal/dispatch/retry.go:235`).
+
+#### Format-drift risk
+
+gascity and beads both parse the same TOML format, and gascity has
+been extending its schema (notably `contract`, `[steps.retry]`,
+`[steps.on_complete]`, and the `gc.*` metadata family) independently
+of beads. Step snapshots that round-trip through `bd` survive
+unchanged today, but a beads-side change to the formula schema does
+not automatically propagate. The flag is tracked in
+[../../gaps-audit.md](../../gaps-audit.md) §A8.
 
 ## Vestigial / watch out
 
