@@ -17,3 +17,4 @@ run. There's no separate state file.
 | 2026-05-20 | json-envelope | `BD_JSON_ENVELOPE=1` opt-in envelope shape; structured-error category field |
 | 2026-05-20 | reference-sweep | 5-way parallel audit across status-lifecycle, dependency-types, hook-protocol, prime-contract, metadata-conventions, gaps-audit |
 | 2026-05-20 | explanation-sweep | 5-way parallel audit across all 6 explanation pages + convergence-metadata + gastown snapshot framing |
+| 2026-05-20 | cli-flags | `bd init --remote` (GH#3527); `bd dolt push/pull --remote` (GH#3211); `bd dep tree` GH#3565 rendering |

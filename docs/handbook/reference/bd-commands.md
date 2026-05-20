@@ -118,7 +118,7 @@ that the prime contract teaches.
 
 | Command | Purpose | File |
 |---|---|---|
-| `bd dep add/rm/tree/cycles` | Dep edge CRUD + inspection. | `cmd/bd/dep.go` |
+| `bd dep add/remove/tree/cycles/list` | Dep edge CRUD + inspection. `rm` is a `remove` alias. `tree` shows dep-type per node and `[BLOCKED]` on the root when an `IsBlockingEdge` predicate dep holds it back (GH#3565). | `cmd/bd/dep.go` |
 | `bd epic` | Epic-specific operations. | `cmd/bd/epic.go` |
 | `bd flatten` | Flatten Dolt history (IRREVERSIBLE). | `cmd/bd/flatten.go` |
 | `bd orphans` | Issues referenced in git commits but still open. `--fix` to close. | `cmd/bd/orphans.go` |
@@ -131,7 +131,7 @@ that the prime contract teaches.
 | `bd import` | JSONL import (GH#2994 upgrade path). | `cmd/bd/import.go` |
 | `bd batch` | Multi-op single-transaction (stdin or file). | `cmd/bd/batch.go` |
 | `bd create --graph <path>` | Apply JSON bead-graph plan. | `cmd/bd/graph_apply.go` |
-| `bd dolt <sub>` | Dolt passthrough: `show`, `set`, `start`, `stop`, `status`, `test`, `push`, `pull`, `commit`, `remote add/list/remove`. | `cmd/bd/dolt.go` |
+| `bd dolt <sub>` | Dolt passthrough: `show`, `set`, `start`, `stop`, `status`, `test`, `push`, `pull`, `commit`, `remote add/list/remove`. `push`/`pull` accept `--remote <name>` to target a non-default remote (GH#3211). | `cmd/bd/dolt.go` |
 | `bd vc commit -m "msg"` | High-level VC wrapper; marks an explicit Dolt commit. | `cmd/bd/vc.go` |
 | `bd federation` | Peer-to-peer Dolt federation — `add-peer`, `list-peers`, `sync`, `status`. | `cmd/bd/federation.go` |
 | `bd ado`, `bd jira`, `bd linear`, `bd github`, `bd gitlab`, `bd notion` | Tracker integrations (sync, push, pull). | `cmd/bd/<tracker>.go` |
@@ -140,7 +140,7 @@ that the prime contract teaches.
 
 | Command | Purpose | File |
 |---|---|---|
-| `bd init` | Main init flow. | `cmd/bd/init.go` |
+| `bd init` | Main init flow. `--remote <url>` clones from an existing remote into a fresh local DB (GH#3527 bootstrap path). | `cmd/bd/init.go` |
 | `bd init-agent`, `bd init-contributor`, `bd init-stealth`, `bd init-team`, `bd init-templates`, `bd init-git-hooks`, `bd init-guard` | Variants. | `cmd/bd/init_*.go` |
 | `bd bootstrap` | Pre-init steps. | `cmd/bd/bootstrap.go` |
 | `bd onboard` | Onboarding flow. | `cmd/bd/onboard.go` |
