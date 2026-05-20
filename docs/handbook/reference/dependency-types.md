@@ -1,9 +1,10 @@
 # Dependency types
 
-Beads has 20 well-known `DependencyType` values, grouped by purpose.
+Beads has 19 well-known `DependencyType` values, grouped by purpose.
 Any non-empty string up to 50 chars is legal — `IsValid`
-(`internal/types/types.go:806-808`) accepts user-defined types too.
-`IsWellKnown` enumerates the constants.
+(`internal/types/types.go:810-812`) accepts user-defined types too.
+`WellKnownDependencyTypes` / `IsWellKnown` enumerate the constants
+(`types.go:816-834`).
 
 All edges are `(issue_id) → depends_on_id` — read as "issue_id
 *depends on* depends_on_id."
@@ -13,7 +14,7 @@ All edges are `(issue_id) → depends_on_id` — read as "issue_id
 Only **`blocks`** appears directly in the `ready_issues` view
 (`migrations/0025_update_ready_issues_view.up.sql:5-22`).
 
-`AffectsReadyWork` (`types.go:825-827`) claims four types affect ready:
+`AffectsReadyWork` (`types.go:838-840`) claims four types affect ready:
 `blocks`, `parent-child`, `conditional-blocks`, `waits-for`. The view
 disagrees:
 
@@ -30,6 +31,12 @@ This is a doc/code divergence — see
 Practical consequence: the "unblocked" set surfaced by `bd ready` is
 computed purely from open `blocks` deps plus the deferred-parent CTE.
 A bead with an open `waits-for` dep WILL appear in `bd ready`.
+
+A second predicate, `IsBlockingEdge` (`types.go:845-847`), narrows
+"hard blocker" to `blocks`, `conditional-blocks`, `waits-for` —
+i.e., excludes `parent-child` (structural, not blocking). `bd dep
+tree` uses it (GH#3565) to decide whether the `[BLOCKED]` badge
+applies to the root node.
 
 ## Cycle detection
 
@@ -52,7 +59,7 @@ In `AddDependencyInTx` (`internal/storage/issueops/dependencies.go:122-150`):
 | `blocks` | yes (direct) | Target must close before source can progress. Default for `bd dep add`. |
 | `parent-child` | indirect | Canonical parent-of relationship. Deferred parent suppresses children. |
 | `conditional-blocks` | no (in view) | "B runs only if A fails." Code honors it; view doesn't. |
-| `waits-for` | no (in view) | Fanout gate: "wait for all-children / any-children / children-of(step)." `WaitsForMeta` JSON on the dep (`types.go:830-837`). |
+| `waits-for` | no (in view) | Fanout gate: "wait for all-children / any-children." `WaitsForMeta` JSON on the dep (`types.go:849-857`); gate constants at `types.go:859-863`. |
 
 ### Association (non-blocking)
 
@@ -77,7 +84,7 @@ In `AddDependencyInTx` (`internal/storage/issueops/dependencies.go:122-150`):
 | `authored-by` | Author identity edge. |
 | `assigned-to` | Assignee identity edge. |
 | `approved-by` | Approval edge. |
-| `attests` | Skill attestation. `AttestsMeta` JSON (`types.go:864-878`). |
+| `attests` | Skill attestation. `AttestsMeta` JSON (`types.go:884-898`). |
 
 ### Convoy / cross-project
 
@@ -154,9 +161,11 @@ consumer code (reads / gates) to resolve across DBs.
 
 | Command | Shape |
 |---|---|
+| `bd dep <blocker> --blocks <blocked>` | Top-level sugar; equivalent to `bd dep add <blocked> <blocker>`. |
 | `bd dep add <issue> <depends-on> [--type <type>]` | Adds an edge. Default type `blocks`. |
-| `bd dep rm <issue> <depends-on>` | Removes an edge. |
-| `bd dep tree <id>` | Walks the graph rooted at `<id>`. |
+| `bd dep remove <issue> <depends-on>` | Removes an edge. Alias: `rm`. |
+| `bd dep list [issue-id...]` | Lists edges for one or more issues. |
+| `bd dep tree <id>` | Walks the graph rooted at `<id>`. Non-root nodes show `[<dep-type>]` next to their parent edge (GH#3565); root shows `[READY]` or `[BLOCKED]` based on `IsBlockingEdge`. |
 | `bd dep cycles` | Lists cycles (rare — only for blocks/conditional-blocks, which beads refuses to create). |
 
 ## Cross-type validation

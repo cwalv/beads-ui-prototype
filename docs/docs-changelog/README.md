@@ -15,3 +15,4 @@ run. There's no separate state file.
 | 2026-05-20 | beads-schema-and-cli | migration 0035 type-driven ephemerality; new `bd ping` / `bd prune`; `--exclude-label`; `BD_JSON_ENVELOPE` env toggle |
 | 2026-05-20 | gate-await-and-key-count | formula gate `await_id` preferred over `id`; gc.* key count 60 → 85 |
 | 2026-05-20 | json-envelope | `BD_JSON_ENVELOPE=1` opt-in envelope shape; structured-error category field |
+| 2026-05-20 | reference-sweep | 5-way parallel audit across status-lifecycle, dependency-types, hook-protocol, prime-contract, metadata-conventions, gaps-audit |

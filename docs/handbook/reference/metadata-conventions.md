@@ -168,6 +168,7 @@ subject bead before each retry via `clearRetryEphemera`
 | `gc.failure_reason` | Free-text reason string |
 | `gc.final_disposition` | Terminal verdict — `"pass"` / `"soft_fail"` / `"hard_fail"` / `"controller_error"` |
 | `gc.last_failure_class` | Most-recent `gc.failure_class` (convenience for observers) |
+| `gc.last_finalize_error` | Last error from the workflow-finalize phase, written on the finalizer bead. Writer: `internal/dispatch/runtime.go:982` (`SetMetadata` on finalizer when finalize returns error; truncated by `truncateWorkflowFinalizeErrorMetadata`). Reader: write-only diagnostic (no non-test reader; surfaced via `bd show`). |
 
 ### Exec output
 
@@ -373,11 +374,40 @@ for the central-registry observation and a recommended cleanup.
 Several `gc.*`-prefixed identifiers in the gascity tree are **not**
 bead metadata. Do not render them as such in a UI:
 
-- **OpenTelemetry instrument names** (metrics, counters, histograms) —
-  `gc.agent.starts.total`, `gc.reconcile.cycles.total`,
-  `gc.bd.duration_ms`, etc. Defined in
-  `internal/telemetry/recorder.go:74-143`. They live in OTel exporters,
-  not `bead.Metadata`.
+- **OpenTelemetry instrument names** (metrics, counters, histograms,
+  gauges). They live in OTel exporters, not `bead.Metadata`. Full
+  current set, by source file:
+
+  | Instrument | Kind | Defined at |
+  |---|---|---|
+  | `gc.agent.starts.total` | counter | `internal/telemetry/recorder.go:75` |
+  | `gc.agent.stops.total` | counter | `internal/telemetry/recorder.go:78` |
+  | `gc.agent.crashes.total` | counter | `internal/telemetry/recorder.go:81` |
+  | `gc.agent.quarantines.total` | counter | `internal/telemetry/recorder.go:84` |
+  | `gc.agent.idle_kills.total` | counter | `internal/telemetry/recorder.go:87` |
+  | `gc.agent.max_age_kills.total` | counter | `internal/telemetry/recorder.go:90` |
+  | `gc.reconcile.cycles.total` | counter | `internal/telemetry/recorder.go:93` |
+  | `gc.session.nudges.total` | counter | `internal/telemetry/recorder.go:96` |
+  | `gc.config.reloads.total` | counter | `internal/telemetry/recorder.go:99` |
+  | `gc.controller.lifecycle.total` | counter | `internal/telemetry/recorder.go:102` |
+  | `gc.bd.calls.total` | counter | `internal/telemetry/recorder.go:105` |
+  | `gc.sling.dispatches.total` | counter | `internal/telemetry/recorder.go:108` |
+  | `gc.pool.spawns.total` | counter | `internal/telemetry/recorder.go:113` |
+  | `gc.pool.removes.total` | counter | `internal/telemetry/recorder.go:116` |
+  | `gc.mail.operations.total` | counter | `internal/telemetry/recorder.go:119` |
+  | `gc.drain.transitions.total` | counter | `internal/telemetry/recorder.go:122` |
+  | `gc.bead_store.healthy` | gauge | `internal/telemetry/recorder.go:127` |
+  | `gc.bd.duration_ms` | histogram | `internal/telemetry/recorder.go:132` |
+  | `gc.pool.check.duration_ms` | histogram | `internal/telemetry/recorder.go:138` |
+  | `gc.http.requests.total` | counter | `internal/telemetry/recorder.go:144` |
+  | `gc.http.duration_ms` | histogram | `internal/telemetry/recorder.go:147` |
+  | `gc.agent.tokens.input` | counter | `internal/telemetry/recorder_invocation.go:41` |
+  | `gc.agent.tokens.output` | counter | `internal/telemetry/recorder_invocation.go:45` |
+  | `gc.agent.tokens.cache_read` | counter | `internal/telemetry/recorder_invocation.go:49` |
+  | `gc.agent.tokens.cache_creation` | counter | `internal/telemetry/recorder_invocation.go:53` |
+  | `gc.agent.invocation.latency_ms` | histogram | `internal/telemetry/recorder_invocation.go:57` |
+  | `gc.agent.invocation.cost_usd` | counter | `internal/telemetry/recorder_invocation.go:61` |
+
 - **OTel resource attributes on subprocess env** — `gc.agent=<name>`,
   `gc.rig=<rig>`, `gc.city=<path>` appended to `OTEL_RESOURCE_ATTRIBUTES`.
 - **Contract file keys (TOML)** — `gc.endpoint_origin`,
@@ -386,8 +416,21 @@ bead metadata. Do not render them as such in a UI:
   metadata.
 - **Filenames / shell completion** — `gc.bash`, `gc.fish`, `gc.log`,
   `gc.test` are file paths in command output or test fixtures.
-- **Version tokens** — `gc.healthz.v1`, `gc.worker.conformance.v1` are
+- **Version tokens** — `gc.healthz.v1`, `gc.worker.conformance.v1`,
+  `gc.dolt.cleanup.v1` (`cmd/gc/cmd_dolt_cleanup.go:23`) are
   contract/schema version strings, not metadata keys.
+- **Cobra command annotations** — `gc.docgen.skip` is a cobra
+  `Cmd.Annotations` key used to suppress a command from generated docs
+  (`cmd/gc/cmd_commands.go:19`, reader `internal/docgen/cli.go:14,96`).
+  Not bead metadata.
+- **Label spelling outlier (`gc.session` with a dot)** — appears once
+  at `internal/agentutil/pool.go:52` as `Label: "gc.session"`. The
+  canonical session label is `gc:session` (colon); the dot form is a
+  latent typo (the query is shadowed by `cmd/gc/session_name_lookup.go`
+  in practice). Filed for upstream fix; do not render as either a
+  metadata key or a live label. See
+  [../../gascity-metadata-deep-dive.md](../../gascity-metadata-deep-dive.md)
+  §13.4.
 - **Pack-specific verdict keys** — `review.verdict`,
   `design_review.verdict`, `code_review.verdict` are written by
   gastown pack check scripts, not by gascity. gascity only clears

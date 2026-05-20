@@ -185,9 +185,9 @@ Implementation in `cmd/bd/hooks.go`:
 | Hook | Behavior |
 |---|---|
 | `pre-commit` | Runs chained user hook; then `exportJSONLForCommit` if `export.auto` is set. |
-| `post-merge` | Always returns 0. |
+| `post-merge` | Runs chained user hook; auto-imports `.beads/issues.jsonl` into Dolt when `import.auto` is set (GH#3729). Never blocks merge. |
 | `pre-push` | Runs chained user hook; can block push. |
-| `post-checkout` | Always returns 0. |
+| `post-checkout` | Runs chained user hook; on branch checkout (flag=1), auto-imports `.beads/issues.jsonl` into Dolt when `import.auto` is set. Never blocks. |
 | `prepare-commit-msg` | Adds `Executed-By: $BD_ACTOR` trailer. Skips on merge. Never blocks. |
 
 ### Disabling / bypassing
@@ -195,7 +195,7 @@ Implementation in `cmd/bd/hooks.go`:
 - `BEADS_HOOK_TIMEOUT=<seconds>` to change timeout.
 - `git commit --no-verify` to bypass all pre-commit hooks (including
   the beads shim).
-- Legacy hooks migrated via `bd migrate-hooks`.
+- Legacy hooks migrated via `bd migrate hooks --apply` (subcommand of `bd migrate`).
 
 ## 3. `bd prime` (session-start)
 

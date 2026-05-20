@@ -67,18 +67,21 @@ Whether these end up active or wip depends on the orchestrator.
 
 ## Transitions
 
-`UpdateIssue` accepts any status string that's a built-in or a
-configured custom (`types.go:347-359`). There's no state machine.
+`UpdateIssue` accepts any status string that passes
+`Status.IsValidWithCustom` (`types.go:347-359`) — built-in or
+configured custom. There's no state machine.
 
 Enforced transitions (beads-core):
 
-- **Claim** (`internal/storage/dolt/issues.go:196-230`):
-  `ClaimIssue(id, actor)` sets `assignee=actor` AND
-  `status='in_progress'` only if the issue has no assignee yet
-  (compare-and-swap). Returns `ErrAlreadyClaimed` on collision.
-- **Close** (`issues.go:260-`): sets `status='closed'` and back-fills
+- **Claim** (`internal/storage/dolt/issues.go:196-230` → SQL in
+  `internal/storage/issueops/claim.go:49-61`): `ClaimIssue(id, actor)`
+  conditionally sets `assignee=actor` AND `status='in_progress'`,
+  succeeding only if `status='open'` AND assignee is empty or already
+  `actor`. Also sets `started_at` on the first transition (preserved on
+  re-claim; GH#2796). Returns `ErrAlreadyClaimed` on collision.
+- **Close** (`issues.go:295-`): sets `status='closed'` and back-fills
   `closed_at` if missing.
-- **Reopen** (`issues.go:235-249`): sets `status='open'` and clears
+- **Reopen** (`issues.go:270-284`): sets `status='open'` and clears
   `defer_until`. Optional `--reason` becomes a comment.
 
 Everything else is free-form `bd update --status <X>`.
@@ -94,8 +97,11 @@ Everything else is free-form `bd update --status <X>`.
   immediately.
 - `bd undefer <id>` sets `status='open'` and clears `defer_until`.
 
-`bd ready` excludes deferred beads by default;
-`--include-deferred` shows any whose `defer_until` has passed.
+`bd ready` already returns beads whose `defer_until` has passed
+(`ready_issues` view: `defer_until IS NULL OR defer_until <=
+UTC_TIMESTAMP()`). The `--include-deferred` flag additionally surfaces
+beads with a *future* `defer_until`
+(`internal/storage/issueops/ready_work.go:80-85`).
 
 ## Pinned
 
@@ -119,14 +125,16 @@ Distinguishing characteristics:
 
 - **Accepted** by `IsValidWithCustom` and `IsBuiltIn` (federation
   trusts them).
-- **NOT accepted** by the strict `IsValid`
-  (`internal/types/types.go:552-558`) — the strict validator excludes
+- **NOT accepted** by the strict `IssueType.IsValid`
+  (`internal/types/types.go:553-563`) — the strict validator excludes
   events from user-facing creation paths.
 - `event_kind`, `actor`, `target`, `payload` columns populated.
 
-They enter via the normal issue-create path with
-`issue_type=event` set — typically by orchestrator operations, not by
-users directly. Beads-core has no `bd event create` CLI.
+They enter via the normal issue-create path with `issue_type=event`
+set. Beads-core has no `bd event create` CLI, but `bd set-state` writes
+one as part of its atomic state-change protocol
+(`cmd/bd/state.go:170-211`). Orchestrators may also create events
+directly.
 
 See [explanation/agent-coordination.md](../explanation/agent-coordination.md)
 for how orchestrators do (and don't) use this.

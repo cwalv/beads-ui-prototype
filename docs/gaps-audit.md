@@ -111,6 +111,16 @@ If beads adds an infra type, gascity's in-process stores (MemStore,
 FileStore, used in tests) drift silently from BdStore. Worth an upstream
 test.
 
+**Update 2026-05-20 (still applies; gascity drift confirmed):** Gascity
+now centralises the list in `internal/beads/beads.go:85-99` as a
+`readyExcludeTypes` map with helper `IsReadyExcludedType`, tested at
+`internal/beads/beads_test.go:47-72`. The local list has already
+diverged from beads: gascity adds `step` and `session` to the seven
+upstream types. Beads's canonical list still lives inline at
+`internal/storage/issueops/ready_work.go:53` and
+`internal/storage/dolt/queries.go:74` (string slice, no shared
+constant). Cross-repo enforcement is still absent; drift has begun.
+
 ### A7. Convoy: formula-type in beads vs full subsystems in orchestrators
 
 - `03-concepts.md:859-886` — beads has a `FormulaType = "convoy"` and a
@@ -199,6 +209,13 @@ to the JSONL (gascity-aware, gastown-blind), or to `type=event` beads
 
 So `bd delete` is a silent-invalidation hazard for any gascity-backed
 cache. The handbook reference should call it out.
+
+**Update 2026-05-20 (still applies, now explicit):** Confirmed at
+`beads/internal/storage/hook_decorator.go:319-323`:
+`DeleteIssue passes through without firing hooks — delete is
+destructive` is now an in-code comment, making the omission
+deliberate (not an oversight). Behaviour unchanged; the cache-drift
+hazard for gascity is unchanged.
 
 ---
 
@@ -323,6 +340,13 @@ waiter as blocked in `bd ready`. Only `blocks` deps do. The handbook's
 ready-semantics page should use the VIEW (the SQL) as canonical, not
 the Go helper.
 
+**Update 2026-05-20 (still applies):** No newer `ready_issues_view`
+migration exists (0025 remains the latest in
+`internal/storage/schema/migrations/`). The view still gates only on
+`d.type = 'blocks'` plus the parent-child deferred-parent CTE; nothing
+references `conditional-blocks` or `waits-for`. Discrepancy with
+`types.AffectsReadyWork` persists. Handbook guidance unchanged.
+
 ### C2. `event` type and the `IsValid()` asymmetry
 
 - `01-data-model.md:§2.15, §10.1` — `TypeEvent` is NOT accepted by
@@ -369,6 +393,13 @@ the handbook reference or flag explicitly.
 Dead code in the hex variant. Not user-visible but worth noting for
 any agent that greps.
 
+**Update 2026-05-20 (still applies):** Both functions still exist at
+the same paths. Production paths
+(`internal/storage/dolt/issues.go`, `issueops/helpers.go`,
+`linear/mapping.go`) still call `idgen.GenerateHashID`. No production
+caller of `types.GenerateHashID` exists outside `id_generator_test.go`.
+Hex variant remains dead.
+
 ### C6. Built-in molecules list is empty
 
 - `03-concepts.md:1133-1145` — `getBuiltinMolecules()` returns `nil` with
@@ -379,6 +410,10 @@ expectations. Recommendation: handbook tutorials should explicitly say
 "you'll need to populate `.beads/molecules.jsonl` yourself or rely on
 your orchestrator's embedded templates."
 
+**Update 2026-05-20 (still applies):** `internal/molecules/molecules.go:241-252`
+still returns `nil` with the same TODO comment. Zero built-in
+molecules ship with bd.
+
 ### C7. `interactions` table has no writer
 
 - `01-data-model.md:§17.7` — migration 0014 creates the
@@ -387,6 +422,12 @@ your orchestrator's embedded templates."
   the table were found.
 
 Likely an unfinished migration target. Not user-visible.
+
+**Update 2026-05-20 (still applies):** Grepping the current tree for
+`INSERT INTO interactions` returns no production matches. `audit.Append`
+in `internal/audit/audit.go:87+` still writes to the JSONL file. Schema
+test at `internal/storage/embeddeddolt/schema_test.go:54` confirms the
+table is still created. No writer added.
 
 ### C8. `metadata` (table) committed vs `local_metadata` (table) clone-local
 
@@ -417,6 +458,15 @@ Minor. Surface only in internals explanation.
   NOT in the `Issue` struct or `IssueSelectColumns`.
 
 Orphaned columns. See [V1].
+
+**Update 2026-05-20 (partially resolved):** Migration
+`0038_drop_hop_columns.up.sql` (beads @ `da73b751`) drops
+`quality_score` and `crystallizes` from both `issues` and `wisps`
+tables, gated by INFORMATION_SCHEMA checks for clean no-ops on fresh
+DBs. **Only those two columns are dropped.** `hook_bead`, `role_bead`,
+`agent_state`, `last_activity`, `role_type`, and `rig` still remain
+orphaned in the schema. The HOP-cleanup arc is in progress; see [V1]
+for the surviving columns.
 
 ### C11. Two migration systems
 
@@ -601,6 +651,15 @@ Orchestrators' use of `hook_bead` in doc 04 §A1 is the *description
 field*, not the column — similar name, different location. Don't
 build against the columns.
 
+**Update 2026-05-20 (partially cleaned up):** Migration
+`0038_drop_hop_columns.up.sql` (beads @ `da73b751`) drops
+`quality_score` and `crystallizes` from `issues` and `wisps` (originally
+named alongside the columns listed above in §17.1 territory). The six
+remaining HOP columns — `hook_bead`, `role_bead`, `agent_state`,
+`last_activity`, `role_type`, `rig` — are still in the schema and still
+absent from the `Issue` struct / `IssueSelectColumns`. Continue to
+avoid building against them. See [C10].
+
 ### V2. `interactions` table has no writer
 
 See C7.
@@ -628,6 +687,12 @@ See C6. Shipped zero.
 
 See C4. Always returns false.
 
+**Update 2026-05-20 (still applies):** `cmd/bd/gate.go:842-844` still
+returns `false, "cross-rig bead gate %q cannot be checked (multi-rig
+routing removed)"`. Website docs at
+`website/docs/cli-reference/gate.md:62` continue to advertise `bead`
+as a valid `--type`. Code path dead, help text stale.
+
 ### V7. `bd merge-slot` removed v0.62+, but the command still exists
 
 - `04-gastown-integration.md:§5.7` — gastown re-implemented merge-slot
@@ -635,6 +700,16 @@ See C4. Always returns false.
   is mentioned in `02-cli-surface.md:§3.6` but not deeply covered.
 
 Spot check needed on beads whether the command still does anything.
+
+**Update 2026-05-20 (still applies — command remains live in bd):**
+`cmd/bd/merge_slot.go` is still present (beads @ `da73b751`) and
+registers a full `bd merge-slot create|check|acquire|release` command
+family. Help text presents it as an active feature for serialised
+conflict resolution per rig. So bd never actually removed it; gastown
+re-implemented anyway. The v0.62-removal note in the source heading is
+inaccurate against the current tree — the bd-side command is alive,
+but neither orchestrator uses it (gastown has its own, gascity has
+none). Treat as "vestigial-by-disuse," not "removed."
 
 ### V8. `federation` subsystem is optional and unused by both orchestrators
 
@@ -645,6 +720,14 @@ Spot check needed on beads whether the command still does anything.
 Federation is a beads-core feature that neither orchestrator adopts.
 Handbook should describe it as optional beads-direct functionality,
 not central to the orchestrated model.
+
+**Update 2026-05-20 (still applies):** `cmd/bd/federation.go` still
+ships the full `bd federation sync|status|add-peer|...` family. Grep
+for `bd federation` in gascity hits only an acceptance-test skip
+condition and an archived feature-parity doc; gastown hits are skill
+tags / wasteland docs, not callers. Wasteland federation in gastown is
+a separate Dolt-server feature (`internal/doltserver/wl_*`), not bd's
+peer-sync. The orchestrator-adoption gap persists.
 
 ### V9. Legacy `wisp` (bool) field
 
@@ -664,6 +747,17 @@ Import-only. Not reachable via normal CLI.
 Not vestigial per se, but the schema history is weird. Both
 orchestrators assume `message` is built-in; the `types.go:543-547`
 comment records the back-and-forth.
+
+**Update 2026-05-20 (storage shape changed):** `TypeMessage` is still a
+built-in `IssueType` per `internal/types/types.go:530` and accepted by
+`IsValid()` at lines 556-562. **But migration
+`0035_migrate_infra_to_wisps.up.sql` (beads @ `da73b751`) now moves all
+`message`-type rows out of `issues` and into `wisps`** (along with
+`agent`, `rig`, `role`). On modern installs, mail beads live in the
+ephemeral `wisps` table (dolt-ignored) rather than the durable `issues`
+table. That's a substantive change in storage semantics: `bd list`
+defaults won't see them, and orchestrator queries that join `issues`
+need a `wisps` UNION. Worth flagging in handbook mail docs.
 
 ### V11. `gc.source_step_spec` metadata key — read-only legacy backstop (gascity)
 
