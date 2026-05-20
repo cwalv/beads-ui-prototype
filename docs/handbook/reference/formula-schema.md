@@ -129,11 +129,16 @@ Per-step:
 ```go
 type Gate struct {
     Type    string  // "gh:run", "gh:pr", "timer", "human", "mail"
-    ID      string
+    ID      string  // legacy — kept for compatibility
+    AwaitID string  // preferred — maps directly to Issue.AwaitID at cook time
     Timeout string
 }
 ```
-(`types.go:271-283`)
+(`types.go:271-292`)
+
+`await_id` is the preferred TOML key (added GH#3382); `id` is still
+accepted as a legacy alias. Both populate `Issue.AwaitID` on the gate
+bead created at cook time.
 
 When `bd cook` sees a step with `gate:`, it creates a gate issue that
 blocks the step. Closing the gate unblocks the step.
@@ -181,7 +186,7 @@ depends_on = ["changelog"]
 id         = "publish"
 title      = "Publish release"
 depends_on = ["tag"]
-gate       = { type = "gh:run", id = "release.yml", timeout = "30m" }
+gate       = { type = "gh:run", await_id = "release.yml", timeout = "30m" }
 
 [[steps]]
 id         = "announce"

@@ -13,3 +13,4 @@ run. There's no separate state file.
 | 2026-04-23 | bootstrap | bootstrap entry, no changes applied |
 | 2026-05-20 | types-and-claim | gate/molecule are built-in; new Type taxonomy section; documented `bd update --claim` atomic-claim semantics |
 | 2026-05-20 | beads-schema-and-cli | migration 0035 type-driven ephemerality; new `bd ping` / `bd prune`; `--exclude-label`; `BD_JSON_ENVELOPE` env toggle |
+| 2026-05-20 | gate-await-and-key-count | formula gate `await_id` preferred over `id`; gc.* key count 60 → 85 |

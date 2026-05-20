@@ -40,10 +40,14 @@ config. Supported field types: `string`, `int`, `float`, `bool`,
 
 ## `gc.*` — gascity
 
-Roughly 60 `gc.*` keys live in active gascity code, organized by
-purpose below. The deep-dive at
+Roughly **85** distinct `gc.*` keys appear as quoted string literals
+in active gascity code (counted at `2c27373a`; was ~60 at the
+`031cfade` bootstrap, the deep-dive's reference point). The catalog
+below covers the load-bearing ones, organized by purpose. The
+deep-dive at
 [../../gascity-metadata-deep-dive.md](../../gascity-metadata-deep-dive.md)
-has the full per-key writer/reader audit.
+has the per-key writer/reader audit (snapshotted at the bootstrap
+tip; some additions since are not yet there).
 
 ### Dispatch / routing
 
