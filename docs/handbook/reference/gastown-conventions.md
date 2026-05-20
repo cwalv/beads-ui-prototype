@@ -1,25 +1,9 @@
 # Gastown conventions
 
-> **Snapshot — preserved for historical reference.** As of the
-> 2026-05-20 docs-refresh sweep, gastown is no longer in the
-> foundations workspace (`projects/foundations/rwv.lock` no longer
-> references it, and `github/gastownhall/` contains only `beads`,
-> `gascity`, and `wasteland`). This page captures the state of
-> gastown's conventions at the 2026-04-23 bootstrap, based on
-> commit `bdbe8c4b0e45f318576c838355fcc85b15e74b8f` (per
-> [../../docs-changelog/2026-04-23-bootstrap.md](../../docs-changelog/2026-04-23-bootstrap.md)).
-> Subsequent gastown changes are **not** reflected here, and the
-> catalog can no longer be verified against canonical sources in
-> this workspace.
->
-> The page is retained as a model of *how an orchestrator layers
-> conventions on top of beads* — the three-substrate split (labels,
-> description-fields, metadata-column) is still a useful framing
-> independent of any specific writer/reader citation below.
->
-> For live, source-verified conventions in this workspace, see the
-> sister page [metadata-conventions.md](metadata-conventions.md)
-> (gascity, still in-tree).
+> Verified 2026-05-20 against gastown tip `b1dc37c75dbd0404e81e024385d77115b908eafe`
+> (15 commits past the 2026-04-23 bootstrap tip
+> `bdbe8c4b0e45f318576c838355fcc85b15e74b8f`). Sister page for gascity:
+> [metadata-conventions.md](metadata-conventions.md).
 
 Gastown organizes bead-level conventions across **three substrates**,
 not one. A UI rendering a gastown bead needs to read all three:
@@ -41,6 +25,12 @@ Full per-key writer/reader audit:
 Paths below are workspace-relative from
 `github/gastownhall/gastown/`.
 
+**Storage note.** Per beads migration 0035, four of the bead kinds
+catalogued here — `agent`, `rig`, `role`, `message` — have their
+canonical row in the `wisps` table, not `issues`. UIs reading raw
+storage need to query both tables for these kinds; the description-field
+parsing rules are identical.
+
 ## Substrate: description fields
 
 Parsed from `bead.description` as `key: value` lines (with a small set
@@ -58,7 +48,7 @@ the type. Struct: `AgentFields` at `beads_agent.go:38-59`.
 | `role_type` | `polecat`, `witness`, `refinery`, `deacon`, `mayor`, `crew`, `dog` |
 | `rig` | Rig name, or `null` for town-level agents |
 | `agent_state` | `spawning`, `working`, `done`, `stuck`, `escalated`, `idle`, `running`, `nuked` |
-| `hook_bead` | Currently pinned work bead id (or `null`) |
+| `hook_bead` | Currently pinned work bead id (or `null`). Read by witness handlers and other watchers; the external write path is gone since hq-l6mm5 (`internal/cmd/sling_helpers.go:565-573` shows `updateAgentHookBead` is now an explicit no-op — the work bead's `status=hooked` + `assignee` is the authoritative dispatch signal). |
 | `cleanup_status` | Polecat git state: `clean`, `has_uncommitted`, `has_stash`, `has_unpushed` |
 | `active_mr` | Currently active merge-request bead id |
 | `notification_level` | `verbose`, `normal`, `muted` |
