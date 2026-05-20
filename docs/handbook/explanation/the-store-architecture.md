@@ -6,10 +6,11 @@ coexist, and how one Dolt server serves many rigs.
 ## Dolt is the only backend
 
 As of v1.0+, `metadata.json.backend` has a single supported value:
-`"dolt"`. No SQLite path remains
-(`github/gastownhall/beads/internal/configfile/configfile.go:175, 212-214`).
-All SQL goes through a local `dolt sql-server` process managed by
-beads's doltserver package.
+`"dolt"`. The `backend` field is marked deprecated and `GetBackend`
+hard-codes a return of `BackendDolt`
+(`internal/configfile/configfile.go:20, 186, 221-223`); no SQLite path
+remains. All SQL goes through a local `dolt sql-server` process
+managed by beads's doltserver package.
 
 `dolt` is a MySQL-wire-compatible SQL database with commit history.
 Every `CREATE TABLE`, `INSERT`, `UPDATE`, `DELETE` is a git-like
@@ -80,7 +81,7 @@ and fetch/push. The wisp_* pattern covers `wisp_labels`,
 `wisp_dependencies`, `wisp_events`, `wisp_comments`.
 
 Both tables share the same schema. `CreateIssue`
-(`internal/storage/dolt/issues.go:24-28`) decides at create time:
+(`internal/storage/dolt/issues.go:19-28`) decides at create time:
 
 ```go
 useWispsTable := issue.Ephemeral || issue.NoHistory ||
@@ -91,7 +92,12 @@ if useWispsTable && !issue.NoHistory {
 ```
 
 A `task` with neither flag set goes to `issues`. Setting either flag,
-or using an infra type, routes to `wisps`.
+or using an infra type, routes to `wisps`. The infra-type defaults
+(`agent`, `rig`, `role`, `message`) live in
+`internal/storage/infra_types.go:7`; migration 0035 backfills any
+historical infra-typed rows out of `issues` into `wisps`. `molecule`
+and `gate` are built-in types but are **not** infra types — they stay
+in `issues` unless their `Ephemeral`/`NoHistory` flag is set.
 
 ## Ephemeral vs no_history
 
@@ -219,19 +225,32 @@ reference.
 
 ## Migration system
 
-Two parallel systems. Both run.
+SQL-only. Migrations live at
+`internal/storage/schema/migrations/NNNN_*.up.sql` (39 up files as of
+the current tip, numbered through 0039). Files are embedded at build
+time; `MigrateUp` (`internal/storage/schema/schema.go:109-131`) reads
+`schema_migrations` for the current version and applies any pending
+`.up.sql` files in numeric order. Data migrations that need control
+flow (existence checks, conditional ALTERs) inline the logic with
+`SET @needs_migration = ...` + `PREPARE/EXECUTE` guards in SQL — see
+0037 (UUID PKs) and 0038 (HOP column drops) for the pattern.
 
-- **SQL migrations** at
-  `internal/storage/schema/migrations/*.up.sql` — 61 files (as of
-  v1.0). Embedded at build time; `MigrateUp`
-  (`internal/storage/schema/schema.go:107-143`) drives sequential
-  execution.
-- **Go migrations** at `internal/storage/dolt/migrations/*.go` — 16
-  files. Each calls `schema.ReadMigrationSQL(version)` plus extra
-  imperative steps (existence checks, data migrations).
+Highlights to know:
 
-Naming isn't always obvious; in practice both run, with SQL files
-providing DDL and Go files providing data changes.
+- **0019** registers `wisps` / `wisp_%` in `dolt_ignore`.
+- **0030** moves clone-local keys (tip timestamps, `bd_version*`,
+  tracker `*.last_sync`) out of the committed `metadata` / `config`
+  tables into the dolt-ignored `local_metadata` table.
+- **0035** moves any existing `agent` / `rig` / `role` / `message`
+  rows from `issues` to `wisps` (matching `CreateIssue`'s runtime
+  routing for new rows).
+- **0037** converts auxiliary tables (`events`, `comments`,
+  `issue_snapshots`, `compaction_snapshots`, `wisp_events`,
+  `wisp_comments`) from `BIGINT AUTO_INCREMENT` to `CHAR(36)` UUIDs.
+  `issues.id` is **not** touched — it remains the base36 hash from
+  `internal/idgen/hash.go`.
+- **0038** drops the legacy HOP-only columns (`quality_score`,
+  `crystallizes`) from `issues` and `wisps` if present.
 
 ## Versioning: what Dolt gives you
 

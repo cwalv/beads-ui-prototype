@@ -45,8 +45,13 @@ Both gastown and gascity implement the delegate as bead CRUD:
 Consequences:
 
 - A bare `bd` install (no orchestrator, no delegate) doesn't have mail.
-- `bd show <message-id>` works — a message is just a bead.
+- `bd show <message-id>` works — a message is just a bead (prefix-based
+  routing transparently resolves wisps).
 - Closing a message archives it (convention).
+- As of migration 0035, `message` (along with `agent`, `rig`, `role`) is
+  an *infra type* — rows live in the `wisps` table, not `issues`. UIs
+  that query `issues` directly will see no messages; use `bd list`,
+  `ListWisps`, or prefix-routed `GetIssue`.
 
 ### Why labels instead of dependencies
 
@@ -74,9 +79,10 @@ On any issue (not just gate-type):
 - `timeout_ns` — max wait.
 - `waiters` — addresses to notify on close.
 
-Convention: create a gate by setting `issue_type = "gate"` (which is a
-custom type — must be configured via `bd config set types.custom "gate,…"`)
-and setting `await_type` + `await_id`.
+Convention: create a gate by setting `issue_type = "gate"` (a built-in
+type as of beads 1.x — `bd gate create/check/resolve` depend on it, so
+it no longer requires `types.custom` registration) and setting
+`await_type` + `await_id`.
 
 ### Gate types
 
@@ -88,8 +94,8 @@ From `cmd/bd/gate.go`:
 | `gh:pr` | GitHub pull request. `await_id` is PR number. | `gh pr view <id>` — state=MERGED. |
 | `timer` | Wall-clock. `timeout_ns` on creation. | Time check. Never escalates. |
 | `human` | Manual. | Operator runs `bd close` or `bd gate resolve`. |
-| `mail` | Message arrival. | (Not fully wired in the core; orchestrator-mediated.) |
-| `bead` | **Vestigial**. Always returns false. Multi-rig routing was removed. |
+| `mail` | Message arrival. | Documented in `bd gate --help` but `bd gate check`'s switch has no `mail` case — falls through to default (skip). Orchestrator-mediated in practice. |
+| `bead` | **Vestigial**. `checkBeadGate` always returns false with "cross-rig bead gate cannot be checked (multi-rig routing removed)" (`cmd/bd/gate.go:842`). |
 
 ### Resolving gates
 
@@ -242,15 +248,15 @@ user can manually run `bd ready` to orient.
 
 Gastown adds:
 
-- **`gt sling`** — work dispatch. Sets `hook_bead` on the target
-  agent bead.
+- **`gt sling`** — work dispatch. Tracks via the work bead's
+  `status=hooked` + `assignee=<agent>`; the agent bead's `hook_bead`
+  slot is no longer maintained (`internal/cmd/sling_helpers.go:565-573`,
+  per hq-l6mm5).
 - **Channels & groups** (`gt mail announce/channel/group`) — pub/sub
   and distribution lists layered on mail.
 - **Nudges** (`gt nudge`, `internal/nudge/`) — tmux send-keys
   delivery that wakes a live agent mid-session.
 - **Escalations** — severity-routed incidents.
-- **`hook_bead`** — each agent bead's "active work" pointer (GUPP
-  rule).
 
 Gascity adds:
 
@@ -269,7 +275,8 @@ Gascity adds:
 
 **Prefer metadata routing.** `gc.routed_to` (or a generic
 equivalent) is more queryable, more visible, and more orchestrator-
-agnostic than gastown's `hook_bead` field.
+agnostic than gastown's bead-status convention (`status=hooked` +
+`assignee`), and survives the legacy `hook_bead` slot's removal.
 
 **Treat mail as beads of type=message.** The delegate protocol is
 noise; the actual data is bead CRUD.

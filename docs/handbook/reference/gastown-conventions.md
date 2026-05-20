@@ -1,5 +1,26 @@
 # Gastown conventions
 
+> **Snapshot — preserved for historical reference.** As of the
+> 2026-05-20 docs-refresh sweep, gastown is no longer in the
+> foundations workspace (`projects/foundations/rwv.lock` no longer
+> references it, and `github/gastownhall/` contains only `beads`,
+> `gascity`, and `wasteland`). This page captures the state of
+> gastown's conventions at the 2026-04-23 bootstrap, based on
+> commit `bdbe8c4b0e45f318576c838355fcc85b15e74b8f` (per
+> [../../docs-changelog/2026-04-23-bootstrap.md](../../docs-changelog/2026-04-23-bootstrap.md)).
+> Subsequent gastown changes are **not** reflected here, and the
+> catalog can no longer be verified against canonical sources in
+> this workspace.
+>
+> The page is retained as a model of *how an orchestrator layers
+> conventions on top of beads* — the three-substrate split (labels,
+> description-fields, metadata-column) is still a useful framing
+> independent of any specific writer/reader citation below.
+>
+> For live, source-verified conventions in this workspace, see the
+> sister page [metadata-conventions.md](metadata-conventions.md)
+> (gascity, still in-tree).
+
 Gastown organizes bead-level conventions across **three substrates**,
 not one. A UI rendering a gastown bead needs to read all three:
 

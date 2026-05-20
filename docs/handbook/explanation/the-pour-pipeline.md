@@ -77,17 +77,17 @@ By default, cook outputs JSON to stdout — the proto is ephemeral.
 `--persist` writes it as a template bead to the DB, marked
 `is_template=true`.
 
-Compilation pipeline (`internal/formula/compile.go`):
+Compilation pipeline (`cmd/bd/cook.go:676` — `resolveAndCookFormulaWithVars`; transforms live in `internal/formula/`):
 
-1. Load by name.
+1. Load by name (`formula.NewParser` → `LoadByName`).
 2. Resolve `extends` (inheritance).
-3. Expand control flow (`loop`, `branch`, `gate`).
-4. Apply advice (before/after/around).
-5. Apply inline expansions (`expand` on steps).
-6. Apply `compose.expand` / `compose.map`.
-7. Apply aspects.
-8. Filter by `condition`.
-9. Materialize expansions.
+3. Expand control flow (`loop`, `branch`, `gate`) via `formula.ApplyControlFlow`.
+4. Apply advice (before/after/around) via `formula.ApplyAdvice`.
+5. Apply inline expansions (`expand` on steps) via `formula.ApplyInlineExpansions`.
+6. Apply `compose.expand` / `compose.map` via `formula.ApplyExpansions`.
+7. Apply aspects (advice imported from `compose.aspects`).
+8. Filter by `condition` via `formula.FilterStepsByCondition`.
+9. Materialize standalone expansion formulas via `formula.MaterializeExpansion`.
 
 Result: a tree of step specs with provenance (source formula and
 line), ready to instantiate.
@@ -115,7 +115,7 @@ $ bd pour mol-release --var version=1.2.0
 Created molecule bd-mol-abc with 3 steps
 ```
 
-What happens (`cmd/bd/pour.go:51-255`):
+What happens (`cmd/bd/pour.go:51-255` — `runPour`):
 
 1. Try to resolve the argument as a formula name. If yes, cook inline
    (ephemeral proto, never persists).
@@ -123,7 +123,7 @@ What happens (`cmd/bd/pour.go:51-255`):
 3. If `phase="vapor"`, warn and suggest `bd mol wisp` instead.
 4. Resolve `--attach` protos (for compound molecules).
 5. Apply variable defaults; error if any required var is missing.
-6. `spawnMolecule(..., ephemeral=false, prefix=IDPrefixMol)` — each
+6. `spawnMolecule(..., ephemeral=false, prefix=types.IDPrefixMol)` — each
    step becomes a child bead with prefix `mol` (e.g. `bd-mol-abc`).
 
 The resulting bead graph has one root (type=`molecule`) and N step
@@ -164,7 +164,7 @@ Automatic TTL compaction via `wisp_type`:
 | `recovery`, `error`, `escalation` | 7d |
 
 The TTL policy is described in `WISP-COMPACTION-POLICY.md` referenced
-in `internal/types/types.go:667`.
+in `internal/types/types.go:671`.
 
 ## Running a molecule
 
@@ -195,12 +195,15 @@ get the mol-id in the first place? **There is no canonical one-liner.**
 `cmd/bd/doctor/agent.go:520` referencing it). The realistic answer is
 multi-tier, ordered by specificity:
 
-1. **`bd list --type=molecule --status=in_progress`** — works only if the
-   workspace registered `molecule` as a custom type via
-   `bd config set types.custom`. Gascity does this by convention; bare bd
-   does not by default. (Note: `molecule` was *removed* from beads-core's
-   built-in type set — `internal/types/types.go:543-547` — so this
-   filter only matches workspaces that explicitly opted in.)
+1. **`bd list --type=molecule --status=in_progress`** — `molecule` and
+   `gate` were re-promoted to beads-core's built-in type set
+   (`internal/types/types.go:531-532`, comment at 547-549). The proto
+   root is created with `IssueType: types.TypeMolecule` by
+   `cookFormula` (`cmd/bd/cook.go:445-456`), and `cloneSubgraph` copies
+   that type verbatim onto the poured root (`cmd/bd/template.go:593`).
+   So this filter works out of the box on a bare bd workspace — any
+   bead poured via `bd pour` or `bd mol wisp` whose proto came from a
+   formula will surface here.
 
 2. **`bd list --mol-type=swarm,patrol,work --status=in_progress`** — works
    only if `mol_type` was *explicitly set* on the bead at create time
@@ -221,9 +224,10 @@ multi-tier, ordered by specificity:
    exact-match list, not a glob), so this requires a client-side filter
    — e.g., `bd list --status=in_progress --json | jq '.[] | select(.id | startswith("bd-mol-"))'`.
 
-In practice, pack authors and tooling builders combine these: try
-custom-type first, fall back through `mol-type` and ID prefix as the
-schema permits. Documented as a real gap in `gaps-audit.md` §C13.
+In practice, pack authors and tooling builders combine these: prefer
+the `--type=molecule` filter (now built-in) and fall back to
+`mol-type` or the ID prefix when the workflow needs finer
+categorization. Documented as a real gap in `gaps-audit.md` §C13.
 
 ## Root-only vs pour semantics
 

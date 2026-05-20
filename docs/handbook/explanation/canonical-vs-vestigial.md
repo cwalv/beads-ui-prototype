@@ -68,8 +68,12 @@ findings; this doc distills them into recommendations.
 
 - **Cross-prefix dep references.** Gastown uses extensively; gascity
   uses for convoy-crosses-rig scenarios.
-- **Custom types / statuses.** Every orchestrator registers its own
-  (`agent`, `rig`, `queue`, `gate`, `molecule`, `message`, …).
+- **Custom types / statuses.** Orchestrators register their own
+  (`agent`, `rig`, `queue`, `convoy`, …). Note: `gate`, `molecule`,
+  `message`, and `event` are now built-in (`internal/types/types.go:530-547`)
+  — `bd` commands like `bd gate`, `bd mol`, and mail delivery depend on
+  them. `agent`/`rig`/`role`/`message` are also infra types that route
+  to the `wisps` table (migration 0035).
 - **Metadata validation (`metadata.validation`)** — optional but
   used when enabled.
 
@@ -151,9 +155,12 @@ the binary ships zero. See §C6.
 
 ### `bd merge-slot`
 
-Removed from bd v0.62+. Both orchestrators re-implemented it (gastown's
-`beads_merge_slot.go`; gascity's doesn't use the concept). Command still
-exists in bd; nothing sensible happens if you use it. See §V7.
+Still ships in bd (currently v1.0.4 per `cmd/bd/version.go`) — `bd
+merge-slot create/check/acquire/release` subcommands exist
+(`cmd/bd/merge_slot.go:14`). But the slot-as-shared-rig-resource model
+it implements is unused by orchestrators in practice: gastown re-
+implemented it (`beads_merge_slot.go`); gascity doesn't use the concept.
+Don't surface in a general UI. See §V7.
 
 ### Schema field: `pinned` bool (column)
 
@@ -225,9 +232,10 @@ If building a generic beads UI:
    columns.
 4. **Don't build threading on `DepRepliesTo`.** Use the label
    convention that gascity established.
-5. **Treat gastown's `hook_bead` field (description) and gascity's
-   `gc.routed_to` (metadata) as two equivalent dispatch signals.**
-   Surface whichever is set; prefer metadata for canonical UX.
+5. **Prefer `gc.routed_to` (metadata) as the canonical dispatch signal.**
+   Gastown's old `hook_bead` slot is no longer maintained (sling is now
+   tracked via the work bead's `status=hooked` + `assignee`); a UI that
+   shows assignee + status + `gc.routed_to` covers both orchestrators.
 6. **Pick metadata conventions as canonical.** Gascity's `gc.*` keys
    are load-bearing. Gastown's description-field conventions are
    gastown-specific; don't privilege them.

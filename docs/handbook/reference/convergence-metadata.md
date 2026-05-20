@@ -102,6 +102,27 @@ at `cmd/gc/convergence_tick.go` and `cmd/gc/cmd_converge.go`. Readers
 span `cmd/gc/cmd_converge.go`, `cmd/gc/convergence_store.go`, and
 the reconciler.
 
+## Not metadata: event-stream discriminators
+
+The following `convergence.*` strings share the namespace prefix but
+are **event-type discriminators** for the gascity event stream, not
+bead metadata keys. They are emitted via `EventEmitter.Emit(type,
+...)` and never appear as `bead.Metadata[k]`. Listed here for
+disambiguation; consumers see them in event payloads, not in
+`bd show --json` metadata.
+
+Source: `internal/convergence/events.go:12-18`.
+
+| Event type | Tier | Emitted by |
+|---|---|---|
+| `convergence.created` | recoverable | `internal/convergence/create.go:132`, `internal/convergence/retry.go:138` |
+| `convergence.iteration` | critical | (see events.go; iteration-event emitters) |
+| `convergence.terminated` | critical | `internal/convergence/manual.go:88,412`, `internal/convergence/handler.go:608`, `internal/convergence/reconcile.go:279,551` |
+| `convergence.waiting_manual` | recoverable | `internal/convergence/handler.go:452`, `internal/convergence/reconcile.go:319` |
+| `convergence.manual_approve` | best_effort | `internal/convergence/manual.go:102` |
+| `convergence.manual_iterate` | recoverable | `internal/convergence/manual.go:210` |
+| `convergence.manual_stop` | best_effort | `internal/convergence/manual.go:427` |
+
 ## See also
 
 - [metadata-conventions.md](metadata-conventions.md) — `gc.*` and

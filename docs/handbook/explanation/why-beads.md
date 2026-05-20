@@ -37,15 +37,19 @@ Beads picks those knobs.
 
 ### 1. The issue is the unit of polymorphism
 
-Beads has one table (`issues`) with ~60 columns. Every coordination
-primitive is represented as an issue: a task bead, a gate bead, a
-message bead, an event bead, a template (proto) bead, an ephemeral
-(wisp) bead. Each carries a `type` and optional type-specific columns
-(`event_kind` for events; `await_type`/`await_id` for gates; `mol_type`
-for molecules).
+Beads has one shared row shape (~50 columns) used by two tables:
+`issues` for durable beads and `wisps` for ephemeral ones (same
+schema, `dolt_ignore`'d). Every coordination primitive is a row:
+a task bead, a gate bead, a molecule bead, an event bead, a template
+(proto) bead, plus the infra/wisp side — agent, rig, role, message.
+Each carries a `type` and optional type-specific columns (`event_kind`
+for events; `await_type`/`await_id` for gates; `mol_type` for molecules;
+`wisp_type` for wisp TTLs).
 
-Orchestrators extend this with custom types (`agent`, `rig`, `queue`,
-`convoy`, `session`) registered via `bd config set types.custom "…"`.
+Built-in infra types (`agent`, `rig`, `role`, `message`) are routed to
+the wisps table automatically (migration 0035). Orchestrators add more
+via `bd config set types.custom "convoy,session,…"` or extend the
+infra list via `types.infra`.
 
 The result: one wire shape, many meanings. A UI that handles one kind
 of bead can handle all of them, given the metadata.
@@ -62,8 +66,8 @@ Why:
   when convenient.
 - **Merge conflicts are diff-visible.** If two clones change the same
   bead, the conflict surfaces in `dolt status`.
-- **History is part of the contract.** `bd compact --dolt` squashes
-  old commits; federation sync is just Dolt remote push/pull.
+- **History is part of the contract.** `bd compact` squashes old Dolt
+  commits; federation sync is just Dolt remote push/pull.
 
 See [the-store-architecture.md](the-store-architecture.md) for how the
 `issues` table is committed and the `wisps` table is kept local via
@@ -81,9 +85,11 @@ queries, but dolt-ignored. Writes skip `DOLT_COMMIT`. TTLs on
 
 ### 4. Dependencies are the graph
 
-20 well-known dependency types (see
+19 well-known dependency types (see
 [../reference/dependency-types.md](../reference/dependency-types.md)).
-Four affect the ready-work computation; sixteen are informational.
+Four affect the ready-work computation (`blocks`, `parent-child`,
+`conditional-blocks`, `waits-for`); the rest are informational. Custom
+dep types are accepted by the storage layer.
 
 Cycle detection runs on `blocks` and `conditional-blocks` additions.
 Cross-prefix references are permitted — you can depend on a bead in
@@ -167,7 +173,7 @@ three pieces fit.
   the change in real time.
 - Memories accumulate; the next session starts with more context than
   the last.
-- A week later, `bd compact --dolt` squashes stale history; workflow
+- A week later, `bd compact` squashes stale history; workflow
   continues.
 
 Beads as plumbing. The orchestrator tells agents what to do with it;
