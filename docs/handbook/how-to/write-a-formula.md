@@ -93,6 +93,11 @@ title      = "Step C — runs after A AND B"
 depends_on = ["a", "b"]
 ```
 
+`needs` is a peer alias for `depends_on` — either key works, and
+the two are merged at cook time
+(`internal/formula/types.go:220`). Pick one per formula for
+consistency.
+
 ## With children (nested steps)
 
 For epic-like hierarchies:
@@ -121,7 +126,7 @@ Block a step on an external condition:
 [[steps]]
 id    = "publish"
 title = "Publish release"
-gate  = { type = "gh:run", id = "release.yml", timeout = "30m" }
+gate  = { type = "gh:run", await_id = "release.yml", timeout = "30m" }
 ```
 
 On cook, a gate bead is created and wired to block `publish`. When the
@@ -129,7 +134,11 @@ GitHub run succeeds (`gh run view --json` status=completed,
 conclusion=success), `bd gate check` closes the gate; publish
 unblocks.
 
-Gate types: `gh:run`, `gh:pr`, `timer`, `human`. See
+`await_id` is the canonical TOML key (maps directly to
+`Issue.AwaitID`). The legacy `id` key still parses but new formulas
+should use `await_id` (`internal/formula/types.go:279-292`).
+
+Gate types: `gh:run`, `gh:pr`, `timer`, `human`, `mail`. See
 [add-a-gate.md](add-a-gate.md).
 
 ## With conditional steps
@@ -277,7 +286,7 @@ bd formula show mol-release    # parse + dump
 bd cook mol-release --mode=runtime --var version=1.0.0 --dry-run
 ```
 
-Formula.Validate (`internal/formula/types.go:540-657`) checks:
+Formula.Validate (`internal/formula/types.go:549-666`) checks:
 
 - Name, version ≥ 1, valid type.
 - Vars: no `required:true` + `default` combo.

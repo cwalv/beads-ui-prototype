@@ -34,7 +34,9 @@ ends with something like:
 
 The prefix becomes the first segment of every bead ID in this project
 (e.g., `bd-tutorial-abc123`). You can override it with `--prefix
-<name>` on init.
+<name>` on init. To bootstrap from an existing Dolt remote in one
+step, pass `--remote <url>` (the workspace clones the remote rather
+than initializing empty).
 
 Verify:
 
@@ -59,8 +61,10 @@ $ bd create "Write the tutorial" --type task --priority 2
 
 Flags:
 
-- `--type <t>` — default `task`. Also: `bug`, `feature`, `epic`,
-  `chore`, `decision`, `story`, `milestone`, `spike`.
+- `--type <t>` — default `task`. Other work types: `bug`,
+  `feature`, `epic`, `chore`, `decision`, `story`, `milestone`,
+  `spike`. (`gate`, `molecule`, and `message` are also built-in
+  but typically created by tooling — see tutorial 2 for `gate`.)
 - `--priority <0-4>` or `-p P2` — 0 is critical, 4 is backlog,
   2 is default.
 - `-d "<description>"` — issue body.
@@ -89,9 +93,10 @@ The `○` icon is status; `P2` is priority.
 Filter:
 
 ```
-$ bd list --labels docs        # beads with label "docs"
-$ bd list --status in_progress # beads in progress
-$ bd list --limit 5            # just 5
+$ bd list --label docs               # beads with label "docs"
+$ bd list --exclude-label wip        # beads without label "wip"
+$ bd list --status in_progress       # beads in progress
+$ bd list --limit 5                  # just 5
 ```
 
 JSON output:

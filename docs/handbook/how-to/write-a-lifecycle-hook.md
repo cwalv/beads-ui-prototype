@@ -15,8 +15,14 @@ For the full protocol reference see
 .beads/hooks/on_close    (executable)
 ```
 
-If a file doesn't exist or isn't executable (mode `0111`), the hook
-silently skips. No configuration needed beyond placing the file.
+If a file doesn't exist or isn't executable (any bit in mode `0111`),
+the hook silently skips. No configuration needed beyond placing the
+file.
+
+The three mutation events are exactly `on_create`, `on_update`, and
+`on_close`. There is no `on_delete` — `bd delete` deliberately skips
+firing because the issue no longer exists to pass to the hook (see
+`internal/storage/hook_decorator.go:319-323`).
 
 ## Invocation
 
@@ -26,13 +32,18 @@ The hook is invoked as:
 /path/to/.beads/hooks/on_update <issue-id> <event-type>
 ```
 
-with the full `types.Issue` struct serialized as JSON on **stdin**.
+where `<event-type>` is one of `create`, `update`, `close` (note: no
+`on_` prefix on the argument — that's only in the file name), with
+the full `types.Issue` struct serialized as JSON on **stdin**.
 
 ## Constraints
 
-- **10 second hard timeout.** Exceeding it kills the whole process group.
-- **Stdout/stderr truncated to 1024 bytes.** Goes to OTel spans; not
-  shown to the user.
+- **10 second hard timeout** (`internal/hooks/hooks.go:38`). Exceeding
+  it kills the whole process group via `SIGKILL` on the negative PID,
+  so child processes die too.
+- **Stdout/stderr truncated to 1024 bytes** (`hooks.go:115`). The
+  captured output is attached to OTel spans; it's not shown to the
+  user.
 - **Fire-and-forget.** Your hook cannot block or veto the triggering
   operation. Ever.
 - **Don't assume user context.** Hooks may run as any user who wrote
@@ -129,9 +140,24 @@ Or run `bd <tracker> push` for any tracker.
   `RunInTransaction`, hooks accumulate and fire only if the Dolt
   commit succeeds.
 
+## Installing / upgrading
+
+Use `bd migrate hooks` (two words, a subcommand of `bd migrate` —
+**not** the older `bd migrate-hooks`):
+
+```bash
+bd migrate hooks --dry-run    # preview the migration plan
+bd migrate hooks --apply      # install / upgrade hook shims
+bd migrate hooks --apply --yes  # non-interactive
+```
+
+This is the canonical install/upgrade form. The plan-then-apply
+pattern keeps the operation observable.
+
 ## Disabling
 
-- `BD_NO_HOOKS=1` env — one-time kill-switch.
+- `BD_NO_HOOKS=1` env — one-time kill-switch. Hook decorator sees it
+  and short-circuits before invoking any script.
 - `bd config set no-hooks true` — persistent.
 
 ## Testing
@@ -142,10 +168,17 @@ hook side effects.
 
 ## Git hooks (separate mechanism)
 
-`bd hooks install` writes a shim into `.git/hooks/*`. Different purpose
-— runs on git operations (commit, push, merge, checkout) rather than
-on bead operations. See
-[../reference/hook-protocol.md](../reference/hook-protocol.md#2-git-hooks).
+`bd migrate hooks --apply` also writes shims into `.git/hooks/*`.
+Different purpose — runs on git operations (commit, push, merge,
+checkout) rather than on bead operations.
+
+The `post-merge` and `post-checkout` shims run any chained user hook
+(preserved if you had one before) and then auto-import
+`.beads/issues.jsonl` into Dolt when `import.auto` is true (the
+default; GH#3729). Set `bd config set import.auto false` to suppress
+the auto-import while keeping the chained user-hook behaviour.
+
+See [../reference/hook-protocol.md](../reference/hook-protocol.md#2-git-hooks).
 
 ## See also
 

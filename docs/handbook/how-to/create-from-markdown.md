@@ -42,16 +42,22 @@ bd-10, bd-20
 
 ## Sections
 
-Recognized (`cmd/bd/markdown.go:68-102`):
+Recognized (`processIssueSection` in `cmd/bd/markdown.go`):
 
-- `priority` — int 0-4 or `P0-P4`.
-- `type` — bug/feature/task/epic/chore/decision/message/story/milestone/spike.
+- `priority` — parsed via `validation.ParsePriority`: accepts int
+  `0-4` or `P0-P4`.
+- `type` — parsed via `validation.ParseIssueType`; invalid values
+  fall back to `task` with a stderr warning.
 - `description` — overrides the pre-`###` body.
-- `design`, `notes`, `acceptance criteria`/`acceptance`.
-- `assignee`, `labels`.
-- `dependencies`/`deps`.
+- `design`.
+- `acceptance criteria` / `acceptance` (alias).
+- `assignee`.
+- `labels`.
+- `dependencies` / `deps` (alias).
 
-Section order is arbitrary. Missing sections fall back to bd defaults.
+There is no `notes` section in the current parser. Unrecognized
+section names are silently ignored. Section order is arbitrary;
+missing sections fall back to bd defaults (`priority=2`, `type=task`).
 
 ## Dependencies
 
@@ -88,32 +94,38 @@ task
 Integration tests for SSO.
 
 ### Dependencies
-blocks:implement-sso
+blocks:bd-abc123
 ```
 
-The IDs are assigned at import. To cross-reference inside the file,
-use the **slugified title** — e.g., `implement-sso` refers to the
-first bead. bd resolves at import time (`cmd/bd/markdown.go:345-376`).
+All beads in one file commit together via `store.CreateIssues`
+followed by a single `bd: create N issue(s) from <path>` commit.
+Cross-references inside a single file must use an existing bead ID
+(`bd-...`) — the parser does not synthesize symbolic / slug-based
+keys. For symbolic cross-references inside one batch, use
+[create-a-graph.md](create-a-graph.md).
 
 ## Commands
 
 ```bash
 # Create from file
 bd create --file plan.md
-
-# Preview without creating (JSON)
-bd create --file plan.md --dry-run --json
-
-# Custom commit message
-bd create --file plan.md --message "bd import: 2026-q2 roadmap"
+bd create -f plan.md         # short form
 ```
+
+`--dry-run` is rejected when `--file` is supplied (see
+`cmd/bd/create.go`: "--dry-run is not supported with --file flag").
+The commit message is fixed to `bd: create N issue(s) from <path>`;
+there is no `--message` flag on `bd create`.
 
 ## Validation
 
-Per-bead validation: title required, priority in [0,4], dep references
-resolvable. Errors fail the whole file — nothing is created.
+Per-bead validation is delegated to the regular create path: title
+required, priority in `[0,4]`, dep type valid. Errors fail the whole
+file — nothing is created (the batch goes through one
+`store.CreateIssues` call).
 
-Enable section-required linting:
+Enable section-required linting via the `--validate` flag (also
+triggered by `validation.on-create=warn|error`):
 
 ```bash
 bd config set validation.on-create warn

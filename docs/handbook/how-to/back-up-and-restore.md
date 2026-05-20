@@ -23,73 +23,117 @@ One Issue per line, followed by memory lines:
 
 Flags:
 
-- `--all` — include infra types (agent / rig / role / message) that
-  are excluded by default.
-- `--no-memories` — exclude memory lines.
-- `--include-infra` — same as `--all`, alternate flag.
-- `--scrub` — filter test-issue pollution (detected by
-  `bd detect-pollution`).
+- `--all` — include everything: infra types (agent / rig / role /
+  message), templates, gates, and memories that are excluded by
+  default.
+- `--include-infra` — include only the infra types (subset of
+  `--all`).
+- `--include-memories` — include persistent memories (`bd remember`).
+  By default memories are excluded because they may contain
+  sensitive agent context. The legacy `--no-memories` flag is
+  hidden — exclusion is now the default.
+- `--scrub` — exclude test/pollution records (`isTestIssue` filter
+  in `export.go`).
+- `-o / --output <file>` — write to a file via an atomic temp+rename
+  rather than stdout.
 
 Timestamps with year 0001 are rewritten to Unix epoch
-(`export.go:237-248`) so the JSON marshaling is stable.
+(`sanitizeZeroTime` in `export.go`) so the JSON marshaling is stable.
+
+Wisps (agent / rig / role / message infra) live in `dolt_ignored`
+tables (migration 0035) and are deliberately *not* committed to
+Dolt — so even with `--all`, you're exporting the local-only view
+of those rows.
 
 ## JSONL import
 
-```bash
-bd import < beads-export.jsonl
-```
-
-Or from a file:
+Stdin:
 
 ```bash
-bd import --file beads-export.jsonl
+bd import - < beads-export.jsonl
 ```
 
-Behavior (`import_shared.go:77-194`):
+Positional file argument, or the `-i / --input` flag:
 
-- Memory records → `store.SetConfig(kv.memory.<k>, v)`.
-- Issue records → `store.CreateIssuesWithFullOptions()` with
-  orphan handling `allow` and prefix validation skipped.
+```bash
+bd import beads-export.jsonl
+bd import -i beads-export.jsonl
+```
+
+With no source given, `bd import` reads `.beads/issues.jsonl`
+(the default location for `export.auto`-managed exports).
+
+Behavior (`import_shared.go`):
+
+- Memory records (`"_type":"memory"`) → `store.SetConfig(kv.memory.<k>, v)`.
+- Issue records → `importIssuesCore` → `store.CreateIssuesWithFullOptions()`
+  with orphan handling `allow` and prefix validation skipped.
 - If no issue prefix is configured, auto-detect from first issue.
-- Single Dolt commit: `bd import: <N> issues, <M> memories from
-  <filename>`.
+- Single Dolt commit: `bd import: <N> issues`.
+- Tombstone entries (status `tombstone`, from pre-v0.50 exports)
+  are silently skipped.
+
+There is also an `auto-import: ... (upgrade recovery, GH#2994)`
+path triggered on first run after an upgrade if `.beads/issues.jsonl`
+is present but the Dolt store is empty.
 
 Line size limit: 64MB per line.
 
+Flags:
+
+- `-i / --input <file>` — legacy alias for the positional file.
+- `--dry-run` — count what would be imported without writing.
+- `--dedup` — skip lines whose title matches an existing open issue.
+
 ## Backward compat
 
-Old `wisp` bool field maps to `ephemeral`. Tombstone entries from
-v0.35-v0.37 (`status: "tombstone"`) are silently skipped.
+The pre-v0.38 `wisp` boolean field maps to `ephemeral` on import.
+Pre-v0.50 tombstone rows (`status: "tombstone"`) are silently
+skipped — see the "Behavior" list above.
 
 ## Dolt backup
 
-Uses `DOLT_BACKUP()` inside the SQL server. `bd backup` wraps it:
+`bd backup` is a Dolt-native snapshot to a directory (not a tarball).
+The default destination is `.beads/backup/` — or the `backup/`
+subdirectory of `backup.git-repo` if that's set to a git checkout.
+
+Subcommands:
 
 ```bash
-bd backup --path /backup/beads-$(date +%Y%m%d).tar.gz
+bd backup init <path-or-url>   # Set up a backup destination
+bd backup sync                 # Push to the configured destination
+bd backup restore [path]       # Restore from a backup directory
+bd backup remove               # Remove the destination
+bd backup status               # Show last-backup state + config
 ```
 
-Includes the full Dolt history (commits, branches, all). Binary;
+`bd backup init` accepts either a filesystem path or a DoltHub URL
+(`https://doltremoteapi.dolthub.com/<user>/<repo>`); for DoltHub
+set `DOLT_REMOTE_USER` and `DOLT_REMOTE_PASSWORD`.
+
+Snapshot contents: the full Dolt history (commits, branches). Binary;
 roughly the size of `.beads/dolt/`.
 
-Restore:
+Restore (positional path; defaults to `backupDir()`):
 
 ```bash
-bd restore --path /backup/beads-20260423.tar.gz
+bd backup restore /path/to/backup-dir
+bd backup restore --force          # Overwrite existing database
 ```
 
-Caveat: the restore wipes existing `.beads/dolt/`. Back up first.
+Caveat: `--force` overwrites `.beads/dolt/` with the snapshot, then
+syncs `metadata.json`'s `_project_id` to match (so the identity
+check doesn't reject subsequent connections). Back up first.
 
 ## Auto-backup
 
-Enable periodic JSONL export to `.beads/backup/`:
-
 ```bash
-bd config set backup.auto true
+bd config set backup.enabled true
 bd config set backup.interval "24h"
 ```
 
-Writes a timestamped JSONL per interval in `.beads/backup/`.
+Periodic Dolt backups land in `backupDir()`. `bd backup status`
+reports the last-committed Dolt hash and the elapsed time since.
 
 ## Auto-export to git
 
@@ -106,12 +150,26 @@ On `pre-commit`, beads exports JSONL to a project-tracked file (default
 This is how a small team can put their beads store in the repo without
 needing a shared Dolt server.
 
+## Dolt remote push / pull
+
+Below `bd backup`, the underlying Dolt remote is reachable directly:
+
+```bash
+bd dolt push                       # push to the default remote
+bd dolt push --remote <name>       # push to a specific named remote
+bd dolt pull                       # pull from the default remote
+bd dolt pull --remote <name>       # pull from a specific named remote
+```
+
+`--remote <name>` (GH#3211) is useful when you have more than one
+Dolt remote configured — e.g. a DoltHub origin plus a side mirror.
+
 ## Federation (peer sync)
 
 For distributed setups, Dolt's native federation:
 
 ```bash
-bd federation add-peer team-sync dolthub://myorg/myproject-beads
+bd federation add-peer team-sync file:///path/to/peer-checkout
 bd federation sync --peer team-sync
 ```
 
@@ -129,11 +187,11 @@ JSONL, then import into a fresh 1.0+ Dolt install.
 
 ### I deleted a bead and want it back
 
-From JSONL backup:
+From a JSONL export of the deleted state:
 
 ```bash
-grep '"id":"bd-abc123"' .beads/backup/latest.jsonl > recover.jsonl
-bd import --file recover.jsonl
+grep '"id":"bd-abc123"' old-export.jsonl > recover.jsonl
+bd import recover.jsonl
 ```
 
 From Dolt history:
@@ -165,18 +223,29 @@ corruption, restore from the last Dolt backup.
 
 ## Gotchas
 
-- **Ephemeral (wisp) beads are NOT in JSONL export by default.**
-  `--all` / `--include-infra` includes them. Wisps are often test
-  data — be thoughtful about what you export.
-- **Memory values commit to Dolt.** A JSONL export includes
-  `_type=memory` lines containing the raw value. Don't put secrets
-  in memories, and review exports before sharing.
-- **`bd backup` includes credentials.** The `.beads/.env` file isn't
-  in the Dolt store but IS in the directory. If you back up the whole
-  `.beads/` dir, secrets go with it. Use `bd backup --path <>` (which
-  wraps Dolt's backup and excludes the .env) rather than `tar cf`.
-- **Restore is destructive.** Test in a non-production environment
-  first.
+- **Wisps are dolt-ignored.** Since migration 0035, infra types
+  (agent / rig / role / message) route to the `wisps` table, which
+  Dolt does not commit. "Everything in the DB" is only true for the
+  `issues` side — wisp rows are local-only and won't survive a
+  `bd backup` / `bd backup restore` round-trip across machines.
+- **UUID PKs on auxiliary tables.** Migration 0037 added UUID
+  primary keys to `events`, `comments`, `issue_snapshots`,
+  `compaction_snapshots`, `wisp_events`, and `wisp_comments`.
+  `issues.id` is unchanged (still the base36 hash from
+  `idgen/hash.go`), but if you have tooling that joins against
+  the PK of those auxiliary tables, the shape changed.
+- **JSONL export excludes infra + memories by default.** Use
+  `--all` / `--include-infra` / `--include-memories` to override.
+  Be thoughtful — wisps may be test data and memories may carry
+  agent context.
+- **Memory values commit to Dolt.** A JSONL export with
+  `--include-memories` emits `_type:memory` lines containing the
+  raw value. Don't put secrets in memories, and review exports
+  before sharing.
+- **Dolt backup is a directory, not a tarball.** Don't `tar` the
+  result and expect `bd backup restore` to accept it.
+- **Restore is destructive.** `--force` overwrites the local Dolt
+  store. Test in a non-production environment first.
 
 ## See also
 

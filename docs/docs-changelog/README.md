@@ -18,3 +18,4 @@ run. There's no separate state file.
 | 2026-05-20 | reference-sweep | 5-way parallel audit across status-lifecycle, dependency-types, hook-protocol, prime-contract, metadata-conventions, gaps-audit |
 | 2026-05-20 | explanation-sweep | 5-way parallel audit across all 6 explanation pages + convergence-metadata + gastown snapshot framing |
 | 2026-05-20 | cli-flags | `bd init --remote` (GH#3527); `bd dolt push/pull --remote` (GH#3211); `bd dep tree` GH#3565 rendering |
+| 2026-05-20 | tutorials-and-how-to | 5-way parallel audit across all 5 tutorial pages + all 7 how-to pages — major rewrites on `back-up-and-restore`, `push-to-github`, `create-a-graph` against fabricated commands/flags |

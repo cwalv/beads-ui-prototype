@@ -21,12 +21,17 @@ mechanism.
 
 ```
 $ bd mail
-Error: no mail delegate configured.
-Set one of:
-  - BEADS_MAIL_DELEGATE env var
-  - BD_MAIL_DELEGATE env var
-  - bd config set mail.delegate "<command>"
+Error: no mail delegate configured
+
+bd mail delegates to an external mail provider.
+Configure one of:
+  export BEADS_MAIL_DELEGATE="gt mail"   # Environment variable
+  bd config set mail.delegate "gt mail"  # Per-project config
 ```
+
+`bd mail` itself is just a passthrough — `mailCmd` in
+`cmd/bd/mail.go` sets `DisableFlagParsing: true` and `exec.Command`s
+the configured delegate with the full argv.
 
 ## Step 2: implement a delegate
 
@@ -93,6 +98,15 @@ Key conventions this delegate uses (matches gastown/gascity):
 - Recipient is `assignee`.
 - Read state is the `read` label.
 - Thread is the `thread:<id>` label.
+
+**Storage note:** since migration `0035_migrate_infra_to_wisps`,
+beads whose `issue_type` is one of `agent`, `rig`, `role`, or
+`message` are routed to the `wisps` table with `ephemeral=1`.
+Legacy DBs are migrated in place. The `wisps` table is in
+`dolt_ignore` (see migration `0019_wisps_dolt_ignore.up.sql`), so
+mail no longer commits to Dolt history — you can't `git log` it.
+Messages are still beads at the API level (`type=message`); only
+their physical storage moved.
 
 ## Step 3: configure bd to use the delegate
 
@@ -163,7 +177,10 @@ $ bd list --type message --assignee alice --status open --label-pattern "^(?!rea
 richer from/to routing via groups and channels. `internal/mail/beadmail/beadmail.go:30-57`.
 
 **Gascity** (`gc mail`): same data shape; label-based threading
-(same as here), `read` label for state. `internal/mail/beadmail/beadmail.go:30-57`.
+(`thread:<id>` label) and `read` label for state — see
+`Provider.Send` (`internal/mail/beadmail/beadmail.go:84-119`),
+`Read`/`MarkRead` (`:180-210`), and the `extractLabel(... "thread:")`
+helper (`:800+`).
 
 Both use the Store interface directly rather than shelling out to
 `bd mail`. The delegate pattern is the exposed contract for tools

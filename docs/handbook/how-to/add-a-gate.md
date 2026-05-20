@@ -1,18 +1,13 @@
 # Add a gate
 
 A gate is a bead that blocks downstream work until a condition
-resolves. Gate types: `gh:run`, `gh:pr`, `timer`, `human`, `mail`.
-(`bead` gate type exists but is broken — see below.)
+resolves. Gate types (`await_type`): `gh:run`, `gh:pr`, `timer`,
+`human`, `mail`. (`bead` is also accepted but its `bd gate check`
+path is dead — see below.)
 
-## Prereq: register the `gate` custom type
-
-`gate` is NOT a built-in issue type. First:
-
-```bash
-bd config set types.custom "gate,convoy,molecule,message"
-```
-
-(The exact set depends on your orchestrator's needs.)
+`gate` is a built-in issue type (see `internal/types/types.go`
+`IsValid`) — no `bd config set types.custom` registration needed on
+a fresh install.
 
 ## Pattern 1: GitHub workflow run
 
@@ -171,11 +166,10 @@ orchestrator. Timers never escalate regardless.
 - **`bead` gate type is dead.** `bd gate check` for `await_type=bead`
   always returns false ("cross-rig bead gate cannot be checked" —
   multi-rig routing was removed). Don't use. See
-  [../../gaps-audit.md](../../gaps-audit.md) §C4.
+  [../../gaps-audit.md](../../gaps-audit.md) §V6.
 - **Gate and blocked bead are separate.** The gate bead has its own
   status; the blocked bead is blocked via a `blocks` dep to the gate.
   Closing the gate bead is what unblocks the downstream.
-- **`gate` type requires custom registration.** See top of doc.
 - **Gates accept labels too.** You can label a gate bead `human` for
   visibility in `bd human list`; that's a separate discoverability
   mechanism from the `await_type=human` semantics.

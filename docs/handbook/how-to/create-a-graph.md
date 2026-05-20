@@ -53,46 +53,54 @@ bd create --graph plan.json
 
 ## Node fields
 
-`PlanNode` (`graph_apply.go:22-36`):
+`GraphApplyNode` (`graph_apply.go`):
 
 | Field | Required | Purpose |
 |---|---|---|
 | `key` | yes | Unique within plan. Symbolic name for edge refs + parent refs. |
-| `title` | yes | ≤ 500 chars. |
-| `type` | no | Defaults to `task`. |
+| `title` | yes | Non-empty. |
+| `type` | no | Validated against built-in types + `types.custom` config. Defaults to `task`. |
 | `description` | no | |
-| `priority` | no | 0-4. Default 2 when omitted. |
+| `priority` | no | 0-4 (pointer; `null`/omitted defaults to 2). |
 | `assignee` | no | |
-| `assign_after_create` | no | If true, assignee is set AFTER deps/labels apply. |
+| `assign_after_create` | no | If true, assignee is set AFTER labels + metadata-refs + edges apply. |
 | `labels` | no | Applied to created issue. |
-| `metadata` | no | Arbitrary JSON. |
-| `metadata_refs` | no | `{"key": "node-id"}` — resolved after node creation. |
-| `parent_key` | no | Reference to another node's key; creates `parent-child` dep. |
+| `metadata` | no | `map[string]string` (note: string values only, not arbitrary JSON). |
+| `metadata_refs` | no | `{"meta_key": "node_key"}` — resolved to the created node's ID after creation. |
+| `parent_key` | no | Reference to another node's key; creates a `parent-child` dep. |
 | `parent_id` | no | Explicit external parent ID (if not in this plan). |
 
 ## Edge fields
 
-`PlanEdge` (`graph_apply.go:38-45`):
+`GraphApplyEdge` (`graph_apply.go`):
 
 | Field | Required | Purpose |
 |---|---|---|
-| `from_key` or `from_id` | yes | Source: plan key OR external ID. |
-| `to_key` or `to_id` | yes | Target: plan key OR external ID. |
+| `from_key` or `from_id` | yes | Source: plan key OR existing-bead ID. |
+| `to_key` or `to_id` | yes | Target: plan key OR existing-bead ID. |
 | `type` | no | Dep type. Default `blocks`. |
-| `metadata` | no | Edge metadata JSON. |
+
+There's no `metadata` field on edges in the current schema —
+dependency metadata lives on the underlying `types.Dependency`
+row created from the edge.
 
 ## Apply order
 
-`graph_apply.go:175-324`:
+`executeGraphApply` in `graph_apply.go`:
 
-1. Create all issues via `store.CreateIssues()`.
-2. Add labels for each node.
-3. Resolve `metadata_refs` now that IDs are known.
-4. Add edges (plan + parent-child).
-5. Assign deferred assignees.
-6. Single Dolt commit.
+1. Build `[]*types.Issue` from nodes (with assignees deferred when
+   `assign_after_create` is set) and call `tx.CreateIssues` once.
+2. Persist labels per node via `tx.AddLabel`.
+3. Resolve `metadata_refs` now that IDs are known; rewrite each
+   node's metadata via `tx.UpdateIssue`.
+4. Add edges via `tx.AddDependency` (using `resolveEdgeRef`).
+5. Add `parent-child` deps from `parent_key` / `parent_id`.
+6. Apply deferred assignees via `tx.UpdateIssue`.
 
-All-or-nothing: if any step fails, the whole commit aborts.
+The whole sequence runs inside `store.RunInTransaction` with a
+commit message of `plan.commit_message` (or
+`"bd: graph-apply <N> nodes"` if unset). All-or-nothing: if any
+step fails, the transaction aborts and nothing is committed.
 
 ## When to use `metadata_refs`
 
@@ -118,26 +126,20 @@ of `other`.
 
 ## External targets
 
-Refer to beads not in this plan:
+Refer to beads not in this plan via `from_id` / `to_id` with the
+existing bead's ID (no special prefix — `resolveEdgeRef` just passes
+the ID through to `tx.AddDependency`):
 
 ```json
 {
   "edges": [
-    {"from_key": "task-local", "to_id": "bd-foreign-abc123", "type": "blocks"},
-    {"from_id": "external:gh-run-5678", "to_key": "task-local", "type": "blocks"}
+    {"from_key": "task-local", "to_id": "bd-foreign-abc123", "type": "blocks"}
   ]
 }
 ```
 
-`external:` prefix is the escape hatch for non-bd targets.
-
-## Dry run
-
-Validates the plan without creating:
-
-```bash
-bd create --graph plan.json --dry-run
-```
+If the ID doesn't resolve at dependency-add time, the transaction
+aborts.
 
 ## Programmatic generation
 

@@ -13,6 +13,13 @@ A 4-step "release" workflow as a formula. Pouring it creates a
 molecule (a workflow instance) with 4 child beads connected by
 `blocks` deps.
 
+`molecule` and `gate` are both built-in `IssueType`s
+(`internal/types/types.go:530-532`); `cookFormula` stamps the
+molecule root bead with `IssueType: types.TypeMolecule`
+(`cmd/bd/cook.go:445-456`). No `bd config set types.custom`
+registration is needed before pouring a formula that produces
+either type.
+
 ## Step 1: write the formula
 
 ```
@@ -220,8 +227,10 @@ $ bd mol progress bd-tutorial-mol-abc123 --json
 
 ## Step 7: wisp a formula (ephemeral)
 
-`bd mol wisp` creates the same structure but in the wisps table — not
-dolt-committed, not shared via git. Use for one-off workflows:
+`bd mol wisp` creates the same structure but in the `wisps` table.
+The `wisps` table is in `dolt_ignore` (see migration
+`0019_wisps_dolt_ignore.up.sql`), so wisps are not dolt-committed
+and not shared via git. Use for one-off workflows:
 
 ```
 $ bd mol wisp mol-release --var version=1.2.1
@@ -240,9 +249,15 @@ is retained until explicitly burned or squashed.
   bead is NOT created unless you `bd cook --persist`.
 - **Only `blocks` deps enforce step readiness** (per the
   [gaps-audit §C1](../../gaps-audit.md)). `depends_on` in the formula
-  becomes `blocks` deps at cook time.
+  becomes `blocks` deps at cook time. Across all dependency edge
+  types beads ships 19 well-known kinds
+  (`internal/types/types.go:817-822`).
 - **`{{variable}}` substitution happens at cook time.** The compiled
   proto shows resolved titles.
+- **Gate steps prefer `await_id` over `id`.** Formula gate steps
+  expose both `id` and `await_id`; `await_id` maps directly to
+  `Issue.AwaitID` at pour time and is the preferred field for new
+  formulas (`internal/formula/types.go:285-291`).
 
 ## Next up
 

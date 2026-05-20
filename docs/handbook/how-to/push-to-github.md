@@ -39,64 +39,57 @@ Or `GITHUB_API_URL`.
 bd github status
 ```
 
-Should report `authenticated` + token scopes.
+Reports the configured token (masked), owner, and repo, plus a
+`✓ Configured` / `❌ Not configured` summary. Use
+`bd github repos` to list repositories the token can see.
 
-## Pulling existing issues
+## Sync
 
-```bash
-bd github sync --pull
-```
-
-Imports matching issues from GitHub to beads. Each gets
-`external_ref = "gh-<number>"` and `source_system = "github"`.
-
-With `--dry-run` to preview.
-
-Filters (per-tracker; check `bd github --help`):
+The single entry point is `bd github sync`. By default it runs
+bidirectionally; restrict to one direction with `--pull-only` or
+`--push-only`:
 
 ```bash
-bd github sync --pull --state=open --assignee=alice
+bd github sync                # pull + push
+bd github sync --pull-only    # only pull from GitHub
+bd github sync --push-only    # only push local to GitHub
+bd github sync --dry-run      # preview, no writes
 ```
 
-## Pushing local beads
+Pulled issues land with `external_ref = "github:<number>"` (or the
+full GitHub issue URL — `BuildExternalRef` prefers the URL when
+present) and `source_system = "github"`. Push: first-time push for
+an unlinked bead creates a new GitHub Issue and writes the
+`external_ref`; subsequent pushes update the existing issue. There
+is no per-bead `bd github push <id>` or `bd github pull <num>`
+subcommand — selective sync goes through `bd github sync` with the
+flags below.
 
-Push a single bead:
+Default conflict resolution is `--prefer-newer` (most recent
+`updated_at` wins). Override with one of:
 
 ```bash
-bd github push bd-tutorial-abc123
+bd github sync --prefer-local       # always keep local beads version
+bd github sync --prefer-github      # always use GitHub version
+bd github sync --prefer-newer       # default (most recent wins)
 ```
 
-First time: creates a new GitHub Issue. Subsequent times: updates it.
-The `external_ref` column links them.
+The three flags are mutually exclusive.
 
-Push all local, unpushed beads:
+## Selective sync
+
+`bd github sync` accepts two scoping flags (mutually exclusive):
 
 ```bash
-bd github sync --push
+bd github sync --issues bd-abc,bd-def    # only these IDs
+bd github sync --parent bd-epic-xyz      # this bead + its subtree (push only)
 ```
 
-Or both directions:
+`--parent` is push-only — combining it with `--pull-only` errors out.
 
-```bash
-bd github sync
-```
-
-Default conflict resolution: timestamp-based. Override with:
-
-```bash
-bd github sync --prefer-local
-bd github sync --prefer-github
-```
-
-## Pulling one issue
-
-If you know the GitHub number:
-
-```bash
-bd github pull gh-42
-```
-
-Creates / updates a local bead linked to GitHub issue #42.
+There are no `--state=` / `--assignee=` / `--since=` filters on
+`bd github sync` itself. Filter on the GitHub side (e.g., scope by
+repo / team) and let the engine pull what the token sees.
 
 ## Field mapping
 
@@ -132,23 +125,32 @@ not round-trip (GitHub has no equivalent field).
 ## Typical workflow
 
 ```bash
-# Initial: import existing GitHub work
-bd github sync --pull --state=open
+# Initial: pull existing GitHub issues into beads
+bd github sync --pull-only
 
-# Daily sync
+# Daily bidirectional sync
 bd github sync
 
-# Or bi-directional + auto-resolve toward local
+# Bidirectional with auto-resolve toward local on conflict
 bd github sync --prefer-local
 ```
 
 ## Scripting
 
-Get beads without external_ref (unpushed):
+To push only specific unpushed beads, build the ID list with `jq`
+and pass them via `--issues`:
 
 ```bash
-bd list --status open --json | jq -r '.[] | select(.external_ref == "") | .id' | \
-    xargs -I{} bd github push {}
+ids=$(bd list --status open --json |
+        jq -r '.[] | select(.external_ref == null or .external_ref == "") | .id' |
+        paste -sd,)
+bd github sync --push-only --issues "$ids"
+```
+
+For an entire epic and its descendants:
+
+```bash
+bd github sync --push-only --parent bd-epic-xyz
 ```
 
 ## Trackers that work the same way
@@ -161,13 +163,26 @@ bd list --status open --json | jq -r '.[] | select(.external_ref == "") | .id' |
 | Azure DevOps | `bd ado` | `AZURE_DEVOPS_ORG`, `AZURE_DEVOPS_PAT` |
 | Notion | `bd notion` | (integration token, via `bd notion init`) |
 
-Each has a `push/pull/sync/status` surface plus tracker-specific
-extras (Linear's `--parent`, ADO's `--area-path`, etc.).
+The shape is `bd <tracker> sync | status` plus `--issues` / `--parent`
+selective-sync flags. Direction flag naming differs by tracker:
+GitHub uses `--pull-only` / `--push-only`; the others (`jira`,
+`linear`, `gitlab`, `ado`, `notion`) use `--pull` / `--push`.
+Tracker-specific extras live on each subcommand (e.g.
+`bd notion init` for the OAuth-style setup flow).
 
 ## Gotchas
 
-- **Rate limits.** GitHub rate-limits aggressively. `bd github sync
-  --pull` on a large repo can saturate. Use `--since` to incremental-sync.
+- **Rate limits.** GitHub rate-limits aggressively.
+  `bd github sync --pull-only` on a large repo can saturate. There's
+  no native `--since` filter on `bd github sync` — narrow the scope
+  with `--issues <ids>` or via the underlying GitHub token's repo
+  access if you need to throttle.
+- **`external_ref` is the GitHub URL or `github:<n>`, not `gh-<n>`.**
+  The shorthand emitted by `BuildExternalRef` when no URL is
+  available is literally `github:42`, recognized by
+  `ghShorthandPattern = ^github:([1-9]\d*)$`. Older docs and
+  external-tracker comments sometimes use `gh-9` as informal
+  shorthand — don't rely on that exact form in scripts.
 - **One assignee per bead on GitHub.** Beads doesn't support multiple
   assignees natively (just the `assignee` column).
 - **Comments don't sync.** Beads comments stay local; GitHub comments
@@ -178,7 +193,7 @@ extras (Linear's `--parent`, ADO's `--area-path`, etc.).
 
 ## Automating via hooks
 
-Auto-push on every bead update:
+Auto-sync on every bead update:
 
 `.beads/hooks/on_update`:
 
@@ -188,13 +203,14 @@ issue_json=$(cat)
 id="$1"
 external_ref=$(echo "$issue_json" | jq -r '.external_ref // ""')
 
-# Only sync beads that are already linked
-if [[ -n "$external_ref" && "$external_ref" == gh-* ]]; then
-    bd github push "$id" &  # background; don't hang the hook
+# Only sync beads that are already linked to GitHub.
+if [[ -n "$external_ref" ]] && \
+   [[ "$external_ref" == github:* || "$external_ref" == *github.com* ]]; then
+    bd github sync --push-only --issues "$id" &  # background; don't hang the hook
 fi
 ```
 
-Background push means the hook returns fast; the external sync runs
+Background sync means the hook returns fast; the external sync runs
 async.
 
 ## See also

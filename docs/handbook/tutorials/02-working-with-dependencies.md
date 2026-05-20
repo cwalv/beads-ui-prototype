@@ -65,42 +65,35 @@ depends on ship," remember that beads uses this as *auth is a child
 of ship*. The parent blocks the child only in the "deferred parent
 hides children" sense.
 
-Now:
+By default `bd dep tree` shows *dependencies* (what blocks the
+target). To see *dependents* — what depends on the target — pass
+`--direction=up`:
 
 ```
-$ bd dep tree bd-tutorial-ship
+$ bd dep tree bd-tutorial-ship --direction=up
 bd-tutorial-ship · Ship auth feature
-├─ bd-tutorial-auth · Implement auth
+└─ (parent-child) bd-tutorial-auth · Implement auth
    └─ (blocks) bd-tutorial-test · Write auth tests
 ```
 
+Each edge is labelled with the dep type. Use `--direction=both` to
+fan out in both directions from the root.
+
 ## Step 5: make auth depend on a gate
 
-A gate blocks a bead on an async condition.
+A gate blocks a bead on an async condition. Use `bd gate create` —
+it wires up the gate type and the blocking dependency in one step:
 
 ```
-$ bd create "Wait for PR #42" --type gate \
-    -d "Waiting for authentication refactor PR" \
-    --await-type gh:pr --await-id 42
+$ bd gate create --type gh:pr --blocks bd-tutorial-auth --await-id 42 \
+    --reason "Waiting for authentication refactor PR"
+✓ Created gate bd-tutorial-gate1 blocking bd-tutorial-auth
 ```
 
-(If you get "unknown type: gate," you need to register `gate` as a
-custom type first:)
-
-```
-$ bd config set types.custom "gate"
-```
-
-…then re-run the create. `gate` lives in the CLI but is not a
-built-in — an oddity flagged in the
-[gaps-audit](../../gaps-audit.md) §C3. Your orchestrator usually
-configures this on your behalf.
-
-Now block auth on the gate:
-
-```
-$ bd dep add bd-tutorial-auth <gate-id>
-```
+`gate` is a built-in bead type, so no `types.custom` setup is
+needed. Supported gate types include `human`, `timer`, `gh:run`,
+and `gh:pr`. Your orchestrator usually creates these on your
+behalf — `bd gate create` is the manual entry point.
 
 ## Step 6: close auth, see test unblock
 
@@ -117,19 +110,29 @@ chaining with a `--claim-next` on worker scripts.
 
 ## Step 7: `bd ready --explain`
 
-When a bead isn't ready, find out why:
+To see why beads are ready or blocked across the workspace:
 
 ```
-$ bd ready --explain bd-tutorial-test
-Blocked:
-  bd-tutorial-test · Write auth tests
-    └─ blocked by: (none — now ready!)
-Ready:
-  bd-tutorial-test · Write auth tests
-    (since bd-tutorial-auth closed)
+$ bd ready --explain
+
+📊 Ready Work Explanation
+
+● Ready (2 issues):
+
+  bd-tutorial-test [P2] Write auth tests
+    Reason: All blockers resolved
+    Resolved blockers: bd-tutorial-auth
+
+  bd-tutorial-ship [P1] Ship auth feature
+    Reason: No dependencies
 ```
 
-Or JSON form:
+`--explain` is workspace-wide — it walks every open bead and
+reports its readiness state plus which blockers were resolved.
+There is no positional bead-ID argument; filter with the standard
+`--label` / `--type` flags if you need to narrow the set.
+
+JSON form:
 
 ```
 $ bd ready --explain --json
@@ -150,8 +153,8 @@ $ bd dep rm bd-tutorial-test bd-tutorial-auth
 
 ## Beyond `blocks`
 
-You've used `blocks` and `parent-child`. Beads has 18 more dep types.
-Important ones:
+You've used `blocks` and `parent-child`. Beads has 17 more well-known
+dep types (19 total). Important ones:
 
 - **`waits-for`** — fanout gate: wait for `all-children`,
   `any-children`, or `children-of(<step>)`. Used in formulas
@@ -163,14 +166,14 @@ Important ones:
 - **`related`** — soft link; no blocking.
 
 See [../reference/dependency-types.md](../reference/dependency-types.md)
-for all 20.
+for all 19.
 
 ## Gotcha: cycles
 
 ```
 $ bd dep add bd-a bd-b         # a blocks on b
 $ bd dep add bd-b bd-a         # b blocks on a → ERROR
-Error: would create cycle in blocks dependencies
+Error: adding dependency would create a cycle
 ```
 
 Cycle detection runs for `blocks` and `conditional-blocks` only. Other
@@ -194,5 +197,5 @@ types are informational, not enforcing.
 
 ## See also
 
-- [../reference/dependency-types.md](../reference/dependency-types.md) — all 20 types.
+- [../reference/dependency-types.md](../reference/dependency-types.md) — all 19 well-known types.
 - [../reference/bd-commands.md#dependencies-and-structure](../reference/bd-commands.md#dependencies-and-structure) — `bd dep` reference.

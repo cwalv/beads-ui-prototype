@@ -89,27 +89,48 @@ Exit code 1 on not found.
 
 ```
 $ bd prime
-# Beads session
+# Beads Workflow Context
 
-Workflow: claim → work → close. Use `bd ready` to find work.
+> **Context Recovery**: Run `bd prime` after compaction, clear, or new session
+> Hooks auto-call this in Claude Code and Codex when a beads workspace is resolved
 
-## Ready work
-○ bd-tutorial-def456 · Draft the intro section [P2 · OPEN]
+## Persistent Memories (1)
 
-## Your active work
-◐ bd-tutorial-abc123 · Write the tutorial [P2 · IN_PROGRESS]
+Stored via `bd remember`. Update in place with `bd remember --key <key> "new content"`. Search with `bd memories <keyword>`. Remove with `bd forget <key>`.
 
-## Memories
-- **this-project-uses-go-1-25-and-requires-goflags-mod**: This project uses Go 1.25 and requires GOFLAGS=-mod=mod.
+### this-project-uses-go-1-25-and-requires-goflags-mod
+This project uses Go 1.25 and requires GOFLAGS=-mod=mod.
 
-## Session-close protocol
-Before ending the session:
-  bd close <id> [--reason "..."] for completed work
-  bd remember "insight..." for future sessions
+# 🚨 SESSION CLOSE PROTOCOL 🚨
+
+...workflow checklist, core rules, command reference...
 ```
 
 Everything you've stored via `bd remember` appears here. An agent
 session that reads this on startup has your accumulated context.
+
+Note: `bd prime` emits a static reference + your memories. It does
+**not** embed live `bd ready` / `bd list --status=in_progress`
+output — the rules tell the agent to run those commands itself.
+
+### Variants
+
+- `bd prime --memories-only` — emit just the persistent memories
+  block. Useful for compact hook contexts (lower token cost).
+- `bd prime --hook-json` — wrap the output in the SessionStart hook
+  JSON envelope shared by Claude Code, Gemini CLI, and Codex. Required
+  for hosts that demand stdout be valid JSON.
+- `bd prime --mcp` — force the brief MCP-mode variant (see Step 9).
+- `bd prime --export` — emit the default content, ignoring any
+  `PRIME.md` override.
+
+### Linear auto-pull
+
+If `LINEAR_API_KEY` is set in the environment (or `linear.api_key`
+is in config), every `bd prime` invocation first checks whether your
+Linear mirror is stale and shells out to `bd linear sync --pull` if so.
+A short note prints to stderr on success; the orientation output is
+unaffected.
 
 ## Step 7: override `bd prime`
 
@@ -142,15 +163,19 @@ $ bd prime
 - Stretch goal: write a how-to.
 ```
 
-The custom file wins. Override chain:
+The custom file wins. Override chain (first match wins):
 
 1. `./.beads/PRIME.md` (clone-specific).
-2. `<resolvedBeadsDir>/PRIME.md` (shared workspace).
-3. `~/.config/beads/PRIME.md` (global).
-4. Default content.
+2. `<resolvedBeadsDir>/PRIME.md` (shared workspace, when beads is
+   redirected).
+3. `~/.config/beads/PRIME.md` (global per-user default).
+4. Built-in default content.
 
-Memories still appear — they're appended even when an override is in
-use, unless you also pass `--export` to see the default verbatim.
+When an override file is used, prime emits **only** that file's
+contents — memories and the default workflow rules are NOT appended.
+If you want the full default output (including memories), pass
+`--export`. If you want just the memories block alongside your
+override, run `bd prime --memories-only` separately.
 
 ## Step 8: `bd setup` for your editor
 
@@ -192,8 +217,9 @@ MCP mode truncates memory values to ~150 chars.
   exits 0 — the session still starts, it just doesn't have beads
   context. See [../reference/prime-contract.md](../reference/prime-contract.md).
 - **Memories are keyed on the `config` table.** Not a bead. Not in
-  `bd list`. Not synced via `bd export` unless you pass `--include-memories`
-  (opposite of the default).
+  `bd list`. Not included by `bd export` unless you pass
+  `--include-memories` (or `--all`) — they're excluded by default
+  because they can contain sensitive agent context.
 
 ## Orchestrator variants
 
