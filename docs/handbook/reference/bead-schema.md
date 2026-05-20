@@ -53,6 +53,54 @@ not content.
 Priority is an integer `0-4` (`P0` = critical, `P4` = backlog). See
 [status-lifecycle.md](status-lifecycle.md) for the status values.
 
+## Type taxonomy
+
+`issue_type` is a `VARCHAR(32)`, not a closed enum — custom values
+are first-class. The canonical built-in set is declared at
+`internal/types/types.go:524-562`:
+
+| Type | Built-in? | Notes |
+|---|---|---|
+| `task` | yes (default) | Default for `bd create` without `--type`. |
+| `bug` | yes | `RequiredSections` adds *Steps to Reproduce* + *Acceptance Criteria* (`types.go:611-643`). |
+| `feature` | yes | |
+| `story` | yes | User story; `RequiredSections` includes *As a / I want / So that*. |
+| `epic` | yes | Container; `RequiredSections` includes *Success Criteria*. Children attach via `parent-child` dep. |
+| `milestone` | yes | Marks completion of a set of related issues; no work itself. |
+| `spike` | yes | Timeboxed investigation to reduce uncertainty. |
+| `chore` | yes | |
+| `decision` | yes | Recorded design call; `RequiredSections` includes *Context / Decision / Consequences*. |
+| `message` | yes | Mail substrate. Threaded via `thread:<id>` labels. Removed from built-ins then re-promoted in GH#1347 because inter-agent comms is too central. |
+| `gate` | yes (internal) | Async coordination primitive. Carries `await_type` / `await_id` / `timeout_ns` / `waiters`. See [Gate fields](#gate-fields-async-coordination). |
+| `molecule` | yes (internal) | Root bead of a poured formula. Children = steps. Carries `mol_type` / `work_type`. See [Molecule / work classification](#molecule--work-classification). |
+| `event` | system-only | Asymmetric validation: rejected by `IsValid()`, accepted by `IsBuiltIn()` and `IsValidWithCustom`. System-emitted audit-trail beads (GH#1356); carries `event_kind` / `actor` / `target` / `payload`. Not creatable via strict CLI validation. |
+
+Beyond the built-in 13, additional types can be registered via
+`bd config set types.custom "name1,name2,…"`. Orchestrators ship
+their own catalogs:
+
+- **gastown** (custom): `agent`, `role`, `rig`, `merge-request`,
+  `convoy`, `slot`, plus a few transient kinds (`channel`,
+  `escalation`, etc.).
+- **gascity** (custom): typically a smaller set;
+  per-`city.toml`.
+
+Two informal groupings help reason about the catalog:
+
+- **Work units** (task, bug, feature, story, chore, spike) — the
+  things you actually do.
+- **Containers** (epic, milestone) — roll-ups that group work via
+  `parent-child` deps.
+- **Coordination** (gate, message, decision) — sync primitives
+  between agents or humans.
+- **Workflow artifacts** (molecule, event) — runtime / system-emitted
+  beads, primarily for orchestrators to read.
+
+These groupings are not enforced in code — they're conceptual aids
+for UI design and documentation. `IssueType.IsValid()` returns true
+for all 12 work + coordination + workflow types; `IsBuiltIn()` adds
+`event`.
+
 ## Assignment
 
 | Column | Type | Default | Go field |
@@ -181,9 +229,12 @@ flag that no built-in view consults. See the `pinned` entry in
 
 Populated when `issue_type == "gate"`. `await_type` values:
 `gh:run`, `gh:pr`, `timer`, `human`, `mail`, `bead`. The `bead` type is
-currently non-functional (`cmd/bd/gate.go:726-734`). `gate` is not a
-built-in `IssueType` — orchestrators must register it via
-`bd config set types.custom "gate,…"`.
+currently non-functional (`cmd/bd/gate.go:726-734`). `gate` is a
+built-in `IssueType` — it passes `IssueType.IsValid()` at
+`internal/types/types.go:556-562` (alongside `molecule`, both flagged
+in source as "internal types" intended for orchestrator coordination
+rather than direct human work). No `bd config set types.custom`
+registration is required.
 
 ## Molecule / work classification
 

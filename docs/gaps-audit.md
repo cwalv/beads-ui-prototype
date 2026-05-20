@@ -344,6 +344,14 @@ The `bd gate` family assumes the type is registered. No error message
 points the user to this config step. Handbook should make it an
 init-time checkbox.
 
+**Update 2026-05-20 (resolved upstream):** `gate` and `molecule` are
+now built-in `IssueType` values per `internal/types/types.go:556-562`
+(beads @ `da73b751`). `IssueType.IsValid()` accepts both alongside the
+work types. The source comment labels them "internal types" — intended
+for orchestrator coordination rather than direct human creation, but no
+`types.custom` registration is required on fresh installs. The
+`03-concepts.md` claim is stale.
+
 ### C4. `bd gate check` of `bead` type always fails
 
 - `03-concepts.md:750-756` — `checkBeadGate` returns false with

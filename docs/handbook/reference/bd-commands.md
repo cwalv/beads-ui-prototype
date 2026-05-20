@@ -55,6 +55,26 @@ The following default to read-only: `list`, `ready`, `show`, `stats`,
 | `bd note` | Append to `notes` field. | `cmd/bd/note.go` |
 | `bd quick`, `bd quickstart` | Fast create + starter flow. | `cmd/bd/quick.go` |
 
+### `bd update --claim` (atomic claim)
+
+The canonical "I'm starting this work" signal. `bd update <id> --claim`
+in one atomic step:
+
+- Sets `status='in_progress'`.
+- Sets `assignee` to the current operator (per `bd config get user` /
+  the agent's session identity).
+- Sets `started_at` to now.
+
+The atomicity matters in multi-agent settings: two agents racing on
+`bd ready` can both pull the same id, but only one's `--claim` will
+win the in-process transition (the second sees a no-op or a guard
+error, depending on storage backend). Without `--claim`, the
+equivalent three-call sequence (`assign` + `state in_progress` +
+field update) has a window where another worker can also claim.
+
+Pairs with `bd close --claim-next` for the close → next-claim flow
+that the prime contract teaches.
+
 ## Views and reports
 
 | Command | Purpose | File |
