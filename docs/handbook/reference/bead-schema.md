@@ -202,6 +202,16 @@ for what each implies.
 | `patrol` / `gc_report` | 24h |
 | `recovery` / `error` / `escalation` | 7d |
 
+**Type-driven ephemerality (migration 0035):** beads with `issue_type`
+in `{agent, rig, role, message}` are now routed to the `wisps` table by
+default. Legacy DBs are migrated in place
+(`migrations/0035_migrate_infra_to_wisps.up.sql`): rows are moved and
+`ephemeral=1` is set. Operationally this means inter-agent mail and
+orchestrator role/agent/rig beads no longer commit to Dolt history —
+they're dolt-ignored. Implication for clients: don't query the `issues`
+table for `type=message` and expect to find recent mail; use the
+`wisps` table (or `bd mail` / `gt mail` which abstract over both).
+
 ## Context markers
 
 | Column | Default | Go field |

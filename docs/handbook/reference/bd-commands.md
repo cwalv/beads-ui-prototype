@@ -27,6 +27,14 @@ Work on any subcommand. Registered at
 Actor resolution order (`main.go:406-435`): `--actor` → `BEADS_ACTOR` →
 `BD_ACTOR` (deprecated) → `git config user.name` → `$USER` → `unknown`.
 
+### Environment toggles
+
+| Var | Effect |
+|---|---|
+| `BD_JSON_ENVELOPE=1` | Wrap every `--json` response in a uniform `{ ok, data, error, schema_version }` envelope. Opt-in; default off for backward compat. See [json-outputs.md](json-outputs.md). |
+| `BEADS_ACTOR` | Override actor (see above). |
+| `BEADS_MAIL_DELEGATE` | Delegate script for `bd mail` (see [collaboration primitives](#collaboration-primitives)). |
+
 ## Read-only commands
 
 The following default to read-only: `list`, `ready`, `show`, `stats`,
@@ -54,6 +62,8 @@ The following default to read-only: `list`, `ready`, `show`, `stats`,
 | `bd comment`, `bd comments` | Add / list comments. | `cmd/bd/comment.go` |
 | `bd note` | Append to `notes` field. | `cmd/bd/note.go` |
 | `bd quick`, `bd quickstart` | Fast create + starter flow. | `cmd/bd/quick.go` |
+| `bd ping` | Lightweight health check: resolve `.beads` workspace and confirm DB connectivity. | `cmd/bd/ping.go` |
+| `bd prune` | Permanently delete closed non-ephemeral beads to reclaim space. Use on long-lived repos. | `cmd/bd/prune.go` |
 
 ### `bd update --claim` (atomic claim)
 
@@ -79,8 +89,8 @@ that the prime contract teaches.
 
 | Command | Purpose | File |
 |---|---|---|
-| `bd list` | Broad filter/list with tree format. Feature-rich. | `cmd/bd/list.go` |
-| `bd ready` | Unblocked, status=open, infra-type-excluded. | `cmd/bd/ready.go` |
+| `bd list` | Broad filter/list with tree format. Feature-rich. Supports `--exclude-label` to drop issues bearing any of the listed labels. | `cmd/bd/list.go` |
+| `bd ready` | Unblocked, status=open, infra-type-excluded. Also supports `--exclude-label`. | `cmd/bd/ready.go` |
 | `bd blocked` | Blocked issues with reason chain. | embedded in `list.go` |
 | `bd search` | Title / desc / notes / external-ref search. | `cmd/bd/search.go` |
 | `bd query` / `bd q` | DSL query engine. | `cmd/bd/query.go` |
