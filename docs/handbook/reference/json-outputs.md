@@ -11,6 +11,65 @@ All `--json` output is emitted through helpers in
 Fields are `encoding/json.Marshal`'d from typed structs with `omitempty`
 where declared.
 
+## Envelope mode (`BD_JSON_ENVELOPE=1`)
+
+Opt-in uniform wrapping. When the env var is set, every `--json`
+command wraps its payload as:
+
+```json
+{"schema_version": 1, "data": <original-payload>}
+```
+
+The original payload is untouched inside `.data` — no type corruption,
+no field injection. Works identically for objects, arrays, and maps.
+
+```bash
+# legacy (default in current release):
+bd list --json | jq '.[0].id'
+bd show fo-abc --json | jq '.title'
+
+# envelope (opt-in now, default in v2.0):
+export BD_JSON_ENVELOPE=1
+bd list --json | jq '.data[0].id'
+bd show fo-abc --json | jq '.data.title'
+
+# version check:
+bd show fo-abc --json | jq '.schema_version'
+```
+
+`schema_version` bumps on breaking changes (field rename/removal,
+structural changes, type changes). Additive new-optional-field
+changes do NOT bump it.
+
+**Timeline (per `beads/docs/JSON_SCHEMA.md`):**
+- Current release: legacy default. `BD_JSON_ENVELOPE=1` opts in. A
+  deprecation notice prints to stderr when `--json` is used without
+  the env var set.
+- v2.0: envelope becomes the default. `BD_JSON_ENVELOPE=0` available
+  as a one-release escape hatch.
+
+Implementation: `cmd/bd/output.go:21` (`jsonEnvelopeEnabled`).
+
+## Structured errors
+
+Error responses in envelope mode emit the same structure with
+`schema_version` and a typed error object inside `.data`:
+
+```json
+{
+  "schema_version": 1,
+  "data": {
+    "error": "<message>",
+    "hint": "<actionable suggestion>",
+    "category": "validation | not_found | conflict | database | network | …"
+  }
+}
+```
+
+Categories are stable identifiers a client can switch on without
+parsing error strings. Sources: `cmd/bd/errors.go`,
+`cmd/bd/protocol/json_contract_test.go`.
+
 ## `bd show --json`
 
 Args: one or more issue IDs. Output: **JSON array** of issue-detail
