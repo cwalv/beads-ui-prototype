@@ -1626,12 +1626,25 @@ Implementation: `cmd/bd/mol.go`, `mol_*.go`.
   source_step_id}` (types.go:~648-655).
 - `mol stale <days>` — stale-check.
 
-### 10.7 `bd wisp`
+### 10.7 `bd wisp` / `bd mol wisp`
 
 Implementation: `cmd/bd/wisp.go:27-70`. Same spawn model as `pour` but with
 `Ephemeral=true`, subject to `WispType` for TTL. Subcommands include
 `list` (`WispListItem`/`WispListResult` at wisp.go:72-93) and `gc`. Old
 threshold for "stale wisp" is 24h (wisp.go:92-93).
+
+**Root-only default (since c459812e, 2026-03-02):** `bd mol wisp` creates
+**only the root issue** unless the formula declares `pour: true` at the top
+level (wisp.go:249-251). Without `pour=true`, child step issues are NOT
+materialized; they are read inline at prime time instead. The `--root-only`
+flag (wisp.go:811,816) can force root-only even on a `pour=true` formula.
+`bd mol pour` always materializes all children regardless of the `pour` field.
+
+This differs from `bd mol pour`, which warns when a formula's `phase` is
+`"vapor"` (pour.go:92-102) but has no equivalent silent override for
+root-only. Wisp does NOT warn when a formula's `phase` is `"liquid"`;
+it silently creates root-only unless `pour=true` is set (see gaps-audit.md
+C12).
 
 ## 11. Config
 

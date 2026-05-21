@@ -486,6 +486,14 @@ Minor UX. Handbook how-to: just say "let `phase:` guide you; if you
 pick the wrong command, you'll get a warning on pour but silence on
 wisp."
 
+**Documentation gap (added 2026-05-20, fo-8fdbk):** The larger issue is
+that `docs/formulas.md` did not document the `pour` formula field at all, so
+formula authors had no way to know it exists or that it controls step
+materialization under `bd mol wisp`. The behavioral change (commit c459812e,
+2026-03-02: wisp defaults to root-only unless `pour=true`) was not reflected
+in the user-facing formula reference. Fixed in `docs/formulas.md` and
+`docs/02-cli-surface.md` §10.7.
+
 ### C13. No canonical bare-bd molecule discovery query
 
 - `cmd/bd/mol*.go` — twelve `bd mol *` subcommands shipped (pour, wisp,
@@ -514,6 +522,28 @@ bare-bd pack's `listFleetItems` implementation.
 Long-term, a `bd list --has-children` flag or a real `bd mol list`
 subcommand would be the right fix; for now packs handle it with the
 heuristic.
+
+### C14. `formulas.md` referenced non-existent `bd mol list` and omitted `convoy` type
+
+Added 2026-05-20 (fo-8fdbk).
+
+- `docs/formulas.md` "Using Formulas" section contained `bd mol list` as the
+  discovery command for formulas. As documented in C13, no `bd mol list`
+  subcommand exists (`cmd/bd/doctor/agent.go:520` has a stale advice string
+  but no implementation). The correct command is `bd formula list` / `bd formula show`.
+- `docs/formulas.md` "Formula Types" table listed three types (`workflow`,
+  `expansion`, `aspect`) but omitted `convoy` (`FormulaType = "convoy"` per
+  `internal/formula/types.go:52`). `02-cli-surface.md:1540` already listed
+  all four.
+
+Both fixed inline in `docs/formulas.md` (2026-05-20, fo-8fdbk).
+
+**Adjacent (not fixed):** `02-cli-surface.md` §10.5 header reads "`bd pour` /
+`bd mol pour`" but `pourCmd` is registered only under `molCmd`
+(`cmd/bd/pour.go:265`), not under `rootCmd`. No top-level `bd pour` exists.
+The section body is otherwise accurate. Left unfixed because the header is
+cosmetic and the body already cites `pour.go` directly; the right fix is to
+drop the `bd pour` alias from the header.
 
 ---
 

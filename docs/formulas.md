@@ -83,6 +83,47 @@ needs = ["review"]
 | `workflow` | Standard step sequence |
 | `expansion` | Template for expansion operator |
 | `aspect` | Cross-cutting concerns |
+| `convoy` | Multi-agent workflow coordinating parallel workers |
+
+## Formula-Level Fields
+
+Top-level fields on a formula (source: `internal/formula/types.go:65-120`):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `formula` | string | Unique name. Convention: `mol-<name>` for workflows, `exp-<name>` for expansions. |
+| `version` | int | Schema version. Must be ≥ 1. Currently always `1`. |
+| `type` | enum | One of `workflow`, `expansion`, `aspect`, `convoy`. |
+| `description` | string | Human-readable explanation of the formula. |
+| `extends` | []string | Parent formulas to inherit from. Child definitions override parent defs with the same ID. |
+| `vars` | map | Variable definitions (see [Variables](#variables) below). |
+| `steps` | []Step | Work items to create on instantiation. |
+| `template` | []Step | Expansion template steps (for `expansion`-type formulas). Uses `{target}` placeholder. |
+| `compose` | ComposeRules | Bond points, hooks, expand/map rules, branch, gate, aspects. |
+| `advice` | []AdviceRule | Step transformations (before/after/around); used by aspect formulas. |
+| `pointcuts` | []Pointcut | Target patterns for aspect application (glob, type, label). |
+| `phase` | enum | `"liquid"` (pour) or `"vapor"` (wisp). Declares the intended instantiation path. `bd mol pour` warns if this is `"vapor"`; `bd mol wisp` is silent regardless of phase. |
+| `pour` | bool | Controls step materialization under `bd mol wisp`. If `true`, each step becomes a persistent child issue. If `false` (default), `bd mol wisp` creates **root only** and reads steps inline at prime time. `bd mol pour` always materializes children regardless of this field. |
+
+### `pour` and `phase` interaction
+
+```
+Formula phase  │  Command used    │  Result
+───────────────┼──────────────────┼──────────────────────────────────────
+vapor          │  bd mol pour     │  Creates all steps + warns "consider bd mol wisp"
+vapor          │  bd mol wisp     │  Creates root only (if pour=false), or all steps (if pour=true)
+liquid         │  bd mol pour     │  Creates all steps, no warning
+liquid         │  bd mol wisp     │  Creates root only (if pour=false), or all steps (if pour=true). No warning.
+(unset)        │  bd mol wisp     │  Root only by default (pour=false default). Set pour=true to materialize steps.
+```
+
+Key rule: `phase` is a recommendation enforced only at `bd mol pour` time (warns on vapor).
+`pour=true` is what actually controls whether `bd mol wisp` materializes child steps — without it,
+wisp always creates the root issue only, regardless of phase.
+
+Reserve `pour=true` for infrequent, high-value workflows (e.g. releases) where per-step DB rows
+and checkpoint recovery are worth the overhead. Patrol and routine operational formulas should
+leave `pour` unset (default false).
 
 ## Variables
 
@@ -193,21 +234,29 @@ Formulas are searched in order:
 ## Using Formulas
 
 ```bash
-# List available formulas
-bd mol list
+# List available formulas (bd formula list, not bd mol list — bd mol list does not exist)
+bd formula list
+bd formula list --type workflow
 
-# Pour formula into molecule
-bd pour <formula-name> --var key=value
+# Inspect a formula
+bd formula show <formula-name>
+
+# Pour formula into persistent molecule (all steps materialized)
+bd mol pour <formula-name> --var key=value
+
+# Create ephemeral wisp (root only by default; set pour=true in formula for all steps)
+bd mol wisp <formula-name> --var key=value
 
 # Preview what would be created
-bd pour <formula-name> --dry-run
+bd mol pour <formula-name> --dry-run
+bd mol wisp <formula-name> --dry-run
 ```
 
 ## Creating Custom Formulas
 
 1. Create file: `.beads/formulas/my-workflow.formula.toml`
 2. Define structure (see examples above)
-3. Use with: `bd pour my-workflow`
+3. Use with: `bd mol pour my-workflow` (persistent) or `bd mol wisp my-workflow` (ephemeral)
 
 ## Example: Release Formula
 
